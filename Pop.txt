@@ -1,50 +1,4 @@
-#requires -version 2
-
-<#
-
-PowerSploit File: PowerView.ps1
-Author: Will Schroeder (@harmj0y)
-License: BSD 3-Clause
-Required Dependencies: None
-
-#>
-
-
-########################################################
-#
-# PSReflect code for Windows API access
-# Author: @mattifestation
-#   https://raw.githubusercontent.com/mattifestation/PSReflect/master/PSReflect.psm1
-#
-########################################################
-
 function New-InMemoryModule {
-<#
-.SYNOPSIS
-
-Creates an in-memory assembly and module
-
-Author: Matthew Graeber (@mattifestation)
-License: BSD 3-Clause
-Required Dependencies: None
-Optional Dependencies: None
-
-.DESCRIPTION
-
-When defining custom enums, structs, and unmanaged functions, it is
-necessary to associate to an assembly module. This helper function
-creates an in-memory module that can be passed to the 'enum',
-'struct', and Add-Win32Type functions.
-
-.PARAMETER ModuleName
-
-Specifies the desired name for the in-memory assembly and module. If
-ModuleName is not provided, it will default to a GUID.
-
-.EXAMPLE
-
-$Module = New-InMemoryModule -ModuleName Win32
-#>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [CmdletBinding()]
@@ -126,98 +80,6 @@ function func {
 
 function Add-Win32Type
 {
-<#
-.SYNOPSIS
-
-Creates a .NET type for an unmanaged Win32 function.
-
-Author: Matthew Graeber (@mattifestation)
-License: BSD 3-Clause
-Required Dependencies: None
-Optional Dependencies: func
-
-.DESCRIPTION
-
-Add-Win32Type enables you to easily interact with unmanaged (i.e.
-Win32 unmanaged) functions in PowerShell. After providing
-Add-Win32Type with a function signature, a .NET type is created
-using reflection (i.e. csc.exe is never called like with Add-Type).
-
-The 'func' helper function can be used to reduce typing when defining
-multiple function definitions.
-
-.PARAMETER DllName
-
-The name of the DLL.
-
-.PARAMETER FunctionName
-
-The name of the target function.
-
-.PARAMETER EntryPoint
-
-The DLL export function name. This argument should be specified if the
-specified function name is different than the name of the exported
-function.
-
-.PARAMETER ReturnType
-
-The return type of the function.
-
-.PARAMETER ParameterTypes
-
-The function parameters.
-
-.PARAMETER NativeCallingConvention
-
-Specifies the native calling convention of the function. Defaults to
-stdcall.
-
-.PARAMETER Charset
-
-If you need to explicitly call an 'A' or 'W' Win32 function, you can
-specify the character set.
-
-.PARAMETER SetLastError
-
-Indicates whether the callee calls the SetLastError Win32 API
-function before returning from the attributed method.
-
-.PARAMETER Module
-
-The in-memory module that will host the functions. Use
-New-InMemoryModule to define an in-memory module.
-
-.PARAMETER Namespace
-
-An optional namespace to prepend to the type. Add-Win32Type defaults
-to a namespace consisting only of the name of the DLL.
-
-.EXAMPLE
-
-$Mod = New-InMemoryModule -ModuleName Win32
-
-$FunctionDefinitions = @(
-  (func kernel32 GetProcAddress ([IntPtr]) @([IntPtr], [String]) -Charset Ansi -SetLastError),
-  (func kernel32 GetModuleHandle ([Intptr]) @([String]) -SetLastError),
-  (func ntdll RtlGetCurrentPeb ([IntPtr]) @())
-)
-
-$Types = $FunctionDefinitions | Add-Win32Type -Module $Mod -Namespace 'Win32'
-$Kernel32 = $Types['kernel32']
-$Ntdll = $Types['ntdll']
-$Ntdll::RtlGetCurrentPeb()
-$ntdllbase = $Kernel32::GetModuleHandle('ntdll')
-$Kernel32::GetProcAddress($ntdllbase, 'RtlGetCurrentPeb')
-
-.NOTES
-
-Inspired by Lee Holmes' Invoke-WindowsApi http://poshcode.org/2189
-
-When defining multiple function prototypes, it is ideal to provide
-Add-Win32Type with an array of function signatures. That way, they
-are all incorporated into the same in-memory module.
-#>
 
     [OutputType([Hashtable])]
     Param(
@@ -361,70 +223,6 @@ are all incorporated into the same in-memory module.
 
 
 function psenum {
-<#
-.SYNOPSIS
-
-Creates an in-memory enumeration for use in your PowerShell session.
-
-Author: Matthew Graeber (@mattifestation)
-License: BSD 3-Clause
-Required Dependencies: None
-Optional Dependencies: None
-
-.DESCRIPTION
-
-The 'psenum' function facilitates the creation of enums entirely in
-memory using as close to a "C style" as PowerShell will allow.
-
-.PARAMETER Module
-
-The in-memory module that will host the enum. Use
-New-InMemoryModule to define an in-memory module.
-
-.PARAMETER FullName
-
-The fully-qualified name of the enum.
-
-.PARAMETER Type
-
-The type of each enum element.
-
-.PARAMETER EnumElements
-
-A hashtable of enum elements.
-
-.PARAMETER Bitfield
-
-Specifies that the enum should be treated as a bitfield.
-
-.EXAMPLE
-
-$Mod = New-InMemoryModule -ModuleName Win32
-
-$ImageSubsystem = psenum $Mod PE.IMAGE_SUBSYSTEM UInt16 @{
-    UNKNOWN =                  0
-    NATIVE =                   1 # Image doesn't require a subsystem.
-    WINDOWS_GUI =              2 # Image runs in the Windows GUI subsystem.
-    WINDOWS_CUI =              3 # Image runs in the Windows character subsystem.
-    OS2_CUI =                  5 # Image runs in the OS/2 character subsystem.
-    POSIX_CUI =                7 # Image runs in the Posix character subsystem.
-    NATIVE_WINDOWS =           8 # Image is a native Win9x driver.
-    WINDOWS_CE_GUI =           9 # Image runs in the Windows CE subsystem.
-    EFI_APPLICATION =          10
-    EFI_BOOT_SERVICE_DRIVER =  11
-    EFI_RUNTIME_DRIVER =       12
-    EFI_ROM =                  13
-    XBOX =                     14
-    WINDOWS_BOOT_APPLICATION = 16
-}
-
-.NOTES
-
-PowerShell purists may disagree with the naming of this function but
-again, this was developed in such a way so as to emulate a "C style"
-definition as closely as possible. Sorry, I'm not going to name it
-New-Enum. :P
-#>
 
     [OutputType([Type])]
     Param (
@@ -507,98 +305,6 @@ function field {
 
 function struct
 {
-<#
-.SYNOPSIS
-
-Creates an in-memory struct for use in your PowerShell session.
-
-Author: Matthew Graeber (@mattifestation)
-License: BSD 3-Clause
-Required Dependencies: None
-Optional Dependencies: field
-
-.DESCRIPTION
-
-The 'struct' function facilitates the creation of structs entirely in
-memory using as close to a "C style" as PowerShell will allow. Struct
-fields are specified using a hashtable where each field of the struct
-is comprosed of the order in which it should be defined, its .NET
-type, and optionally, its offset and special marshaling attributes.
-
-One of the features of 'struct' is that after your struct is defined,
-it will come with a built-in GetSize method as well as an explicit
-converter so that you can easily cast an IntPtr to the struct without
-relying upon calling SizeOf and/or PtrToStructure in the Marshal
-class.
-
-.PARAMETER Module
-
-The in-memory module that will host the struct. Use
-New-InMemoryModule to define an in-memory module.
-
-.PARAMETER FullName
-
-The fully-qualified name of the struct.
-
-.PARAMETER StructFields
-
-A hashtable of fields. Use the 'field' helper function to ease
-defining each field.
-
-.PARAMETER PackingSize
-
-Specifies the memory alignment of fields.
-
-.PARAMETER ExplicitLayout
-
-Indicates that an explicit offset for each field will be specified.
-
-.EXAMPLE
-
-$Mod = New-InMemoryModule -ModuleName Win32
-
-$ImageDosSignature = psenum $Mod PE.IMAGE_DOS_SIGNATURE UInt16 @{
-    DOS_SIGNATURE =    0x5A4D
-    OS2_SIGNATURE =    0x454E
-    OS2_SIGNATURE_LE = 0x454C
-    VXD_SIGNATURE =    0x454C
-}
-
-$ImageDosHeader = struct $Mod PE.IMAGE_DOS_HEADER @{
-    e_magic =    field 0 $ImageDosSignature
-    e_cblp =     field 1 UInt16
-    e_cp =       field 2 UInt16
-    e_crlc =     field 3 UInt16
-    e_cparhdr =  field 4 UInt16
-    e_minalloc = field 5 UInt16
-    e_maxalloc = field 6 UInt16
-    e_ss =       field 7 UInt16
-    e_sp =       field 8 UInt16
-    e_csum =     field 9 UInt16
-    e_ip =       field 10 UInt16
-    e_cs =       field 11 UInt16
-    e_lfarlc =   field 12 UInt16
-    e_ovno =     field 13 UInt16
-    e_res =      field 14 UInt16[] -MarshalAs @('ByValArray', 4)
-    e_oemid =    field 15 UInt16
-    e_oeminfo =  field 16 UInt16
-    e_res2 =     field 17 UInt16[] -MarshalAs @('ByValArray', 10)
-    e_lfanew =   field 18 Int32
-}
-
-# Example of using an explicit layout in order to create a union.
-$TestUnion = struct $Mod TestUnion @{
-    field1 = field 0 UInt32 0
-    field2 = field 1 IntPtr 0
-} -ExplicitLayout
-
-.NOTES
-
-PowerShell purists may disagree with the naming of this function but
-again, this was developed in such a way so as to emulate a "C style"
-definition as closely as possible. Sorry, I'm not going to name it
-New-Struct. :P
-#>
 
     [OutputType([Type])]
     Param (
@@ -725,147 +431,7 @@ New-Struct. :P
 }
 
 
-########################################################
-#
-# Misc. helpers
-#
-########################################################
-
 Function New-DynamicParameter {
-<#
-.SYNOPSIS
-
-Helper function to simplify creating dynamic parameters.
-
-    Adapated from https://beatcracker.wordpress.com/2015/08/10/dynamic-parameters-validateset-and-enums/.
-    Originally released under the Microsoft Public License (Ms-PL).
-
-.DESCRIPTION
-
-Helper function to simplify creating dynamic parameters.
-
-Example use cases:
-    Include parameters only if your environment dictates it
-    Include parameters depending on the value of a user-specified parameter
-    Provide tab completion and intellisense for parameters, depending on the environment
-
-Please keep in mind that all dynamic parameters you create, will not have corresponding variables created.
-    Use New-DynamicParameter with 'CreateVariables' switch in your main code block,
-    ('Process' for advanced functions) to create those variables.
-    Alternatively, manually reference $PSBoundParameters for the dynamic parameter value.
-
-This function has two operating modes:
-
-1. All dynamic parameters created in one pass using pipeline input to the function. This mode allows to create dynamic parameters en masse,
-with one function call. There is no need to create and maintain custom RuntimeDefinedParameterDictionary.
-
-2. Dynamic parameters are created by separate function calls and added to the RuntimeDefinedParameterDictionary you created beforehand.
-Then you output this RuntimeDefinedParameterDictionary to the pipeline. This allows more fine-grained control of the dynamic parameters,
-with custom conditions and so on.
-
-.NOTES
-
-Credits to jrich523 and ramblingcookiemonster for their initial code and inspiration:
-    https://github.com/RamblingCookieMonster/PowerShell/blob/master/New-DynamicParam.ps1
-    http://ramblingcookiemonster.wordpress.com/2014/11/27/quick-hits-credentials-and-dynamic-parameters/
-    http://jrich523.wordpress.com/2013/05/30/powershell-simple-way-to-add-dynamic-parameters-to-advanced-function/
-
-Credit to BM for alias and type parameters and their handling
-
-.PARAMETER Name
-
-Name of the dynamic parameter
-
-.PARAMETER Type
-
-Type for the dynamic parameter.  Default is string
-
-.PARAMETER Alias
-
-If specified, one or more aliases to assign to the dynamic parameter
-
-.PARAMETER Mandatory
-
-If specified, set the Mandatory attribute for this dynamic parameter
-
-.PARAMETER Position
-
-If specified, set the Position attribute for this dynamic parameter
-
-.PARAMETER HelpMessage
-
-If specified, set the HelpMessage for this dynamic parameter
-
-.PARAMETER DontShow
-
-If specified, set the DontShow for this dynamic parameter.
-This is the new PowerShell 4.0 attribute that hides parameter from tab-completion.
-http://www.powershellmagazine.com/2013/07/29/pstip-hiding-parameters-from-tab-completion/
-
-.PARAMETER ValueFromPipeline
-
-If specified, set the ValueFromPipeline attribute for this dynamic parameter
-
-.PARAMETER ValueFromPipelineByPropertyName
-
-If specified, set the ValueFromPipelineByPropertyName attribute for this dynamic parameter
-
-.PARAMETER ValueFromRemainingArguments
-
-If specified, set the ValueFromRemainingArguments attribute for this dynamic parameter
-
-.PARAMETER ParameterSetName
-
-If specified, set the ParameterSet attribute for this dynamic parameter. By default parameter is added to all parameters sets.
-
-.PARAMETER AllowNull
-
-If specified, set the AllowNull attribute of this dynamic parameter
-
-.PARAMETER AllowEmptyString
-
-If specified, set the AllowEmptyString attribute of this dynamic parameter
-
-.PARAMETER AllowEmptyCollection
-
-If specified, set the AllowEmptyCollection attribute of this dynamic parameter
-
-.PARAMETER ValidateNotNull
-
-If specified, set the ValidateNotNull attribute of this dynamic parameter
-
-.PARAMETER ValidateNotNullOrEmpty
-
-If specified, set the ValidateNotNullOrEmpty attribute of this dynamic parameter
-
-.PARAMETER ValidateRange
-
-If specified, set the ValidateRange attribute of this dynamic parameter
-
-.PARAMETER ValidateLength
-
-If specified, set the ValidateLength attribute of this dynamic parameter
-
-.PARAMETER ValidatePattern
-
-If specified, set the ValidatePattern attribute of this dynamic parameter
-
-.PARAMETER ValidateScript
-
-If specified, set the ValidateScript attribute of this dynamic parameter
-
-.PARAMETER ValidateSet
-
-If specified, set the ValidateSet attribute of this dynamic parameter
-
-.PARAMETER Dictionary
-
-If specified, add resulting RuntimeDefinedParameter to an existing RuntimeDefinedParameterDictionary.
-Appropriate for custom dynamic parameters creation.
-
-If not specified, create and return a RuntimeDefinedParameterDictionary
-Appropriate for a simple dynamic parameter creation.
-#>
 
     [CmdletBinding(DefaultParameterSetName = 'DynamicParameter')]
     Param (
@@ -1251,7 +817,7 @@ https://blogs.technet.microsoft.com/heyscriptingguy/2011/08/20/use-powershell-to
 }
 
 
-function Export-PowerViewCSV {
+function Export-pViewCSV {
 <#
 .SYNOPSIS
 
@@ -1266,7 +832,7 @@ Required Dependencies: None
 
 This helper exports an -InputObject to a .csv in a thread-safe manner
 using a mutex. This is so the various multi-threaded functions in
-PowerView has a thread-safe way to export output to the same file.
+pView has a thread-safe way to export output to the same file.
 Uses .NET IO.FileStream/IO.StreamWriter objects for speed.
 
 Originally based on Dmitry Sotnikov's Export-CSV code: http://poshcode.org/1590
@@ -1286,15 +852,15 @@ Specifies a delimiter to separate the property values. The default is a comma (,
 .PARAMETER Append
 
 Indicates that this cmdlet adds the CSV output to the end of the specified file.
-Without this parameter, Export-PowerViewCSV replaces the file contents without warning.
+Without this parameter, Export-pViewCSV replaces the file contents without warning.
 
 .EXAMPLE
 
-Get-DomainUser | Export-PowerViewCSV -Path "users.csv"
+Get-DomainUser | Export-pViewCSV -Path "users.csv"
 
 .EXAMPLE
 
-Get-DomainUser | Export-PowerViewCSV -Path "users.csv" -Append -Delimiter '|'
+Get-DomainUser | Export-pViewCSV -Path "users.csv" -Append -Delimiter '|'
 
 .INPUTS
 
@@ -2583,7 +2149,7 @@ Required Dependencies: Invoke-UserImpersonation, Invoke-RevertToSelf
 
 .DESCRIPTION
 
-This function will either take one/more SPN strings, or one/more PowerView.User objects
+This function will either take one/more SPN strings, or one/more pView.User objects
 (the output from Get-DomainUser) and will request a kerberos ticket for the given SPN
 using System.IdentityModel.Tokens.KerberosRequestorSecurityToken. The encrypted
 portion of the ticket is then extracted and output in either crackable John or Hashcat
@@ -2595,7 +2161,7 @@ Specifies the service principal name to request the ticket for.
 
 .PARAMETER User
 
-Specifies a PowerView.User object (result of Get-DomainUser) to request the ticket for.
+Specifies a pView.User object (result of Get-DomainUser) to request the ticket for.
 
 .PARAMETER OutputFormat
 
@@ -2633,18 +2199,18 @@ Accepts one or more SPN strings on the pipeline with the RawSPN parameter set.
 
 .INPUTS
 
-PowerView.User
+pView.User
 
-Accepts one or more PowerView.User objects on the pipeline with the User parameter set.
+Accepts one or more pView.User objects on the pipeline with the User parameter set.
 
 .OUTPUTS
 
-PowerView.SPNTicket
+pView.SPNTicket
 
 Outputs a custom object containing the SamAccountName, ServicePrincipalName, and encrypted ticket section.
 #>
 
-    [OutputType('PowerView.SPNTicket')]
+    [OutputType('pView.SPNTicket')]
     [CmdletBinding(DefaultParameterSetName = 'RawSPN')]
     Param (
         [Parameter(Position = 0, ParameterSetName = 'RawSPN', Mandatory = $True, ValueFromPipeline = $True)]
@@ -2654,7 +2220,7 @@ Outputs a custom object containing the SamAccountName, ServicePrincipalName, and
         $SPN,
 
         [Parameter(Position = 0, ParameterSetName = 'User', Mandatory = $True, ValueFromPipeline = $True)]
-        [ValidateScript({ $_.PSObject.TypeNames[0] -eq 'PowerView.User' })]
+        [ValidateScript({ $_.PSObject.TypeNames[0] -eq 'pView.User' })]
         [Object[]]
         $User,
 
@@ -2760,7 +2326,7 @@ Outputs a custom object containing the SamAccountName, ServicePrincipalName, and
                     $Out | Add-Member Noteproperty 'Hash' $HashFormat
                 }
 
-                $Out.PSObject.TypeNames.Insert(0, 'PowerView.SPNTicket')
+                $Out.PSObject.TypeNames.Insert(0, 'pView.SPNTicket')
                 $Out
             }
         }
@@ -2775,100 +2341,9 @@ Outputs a custom object containing the SamAccountName, ServicePrincipalName, and
 
 
 function Invoke-Kerberoast {
-<#
-.SYNOPSIS
-
-Requests service tickets for kerberoast-able accounts and returns extracted ticket hashes.
-
-Author: Will Schroeder (@harmj0y), @machosec  
-License: BSD 3-Clause  
-Required Dependencies: Invoke-UserImpersonation, Invoke-RevertToSelf, Get-DomainUser, Get-DomainSPNTicket  
-
-.DESCRIPTION
-
-Uses Get-DomainUser to query for user accounts with non-null service principle
-names (SPNs) and uses Get-SPNTicket to request/extract the crackable ticket information.
-The ticket format can be specified with -OutputFormat <John/Hashcat>.
-
-.PARAMETER Identity
-
-A SamAccountName (e.g. harmj0y), DistinguishedName (e.g. CN=harmj0y,CN=Users,DC=testlab,DC=local),
-SID (e.g. S-1-5-21-890171859-3433809279-3366196753-1108), or GUID (e.g. 4c435dd7-dc58-4b14-9a5e-1fdb0e80d201).
-Wildcards accepted.
-
-.PARAMETER Domain
-
-Specifies the domain to use for the query, defaults to the current domain.
-
-.PARAMETER LDAPFilter
-
-Specifies an LDAP query string that is used to filter Active Directory objects.
-
-.PARAMETER SearchBase
-
-The LDAP source to search through, e.g. "LDAP://OU=secret,DC=testlab,DC=local"
-Useful for OU queries.
-
-.PARAMETER Server
-
-Specifies an Active Directory server (domain controller) to bind to.
-
-.PARAMETER SearchScope
-
-Specifies the scope to search under, Base/OneLevel/Subtree (default of Subtree).
-
-.PARAMETER ResultPageSize
-
-Specifies the PageSize to set for the LDAP searcher object.
-
-.PARAMETER ServerTimeLimit
-
-Specifies the maximum amount of time the server spends searching. Default of 120 seconds.
-
-.PARAMETER Tombstone
-
-Switch. Specifies that the searcher should also return deleted/tombstoned objects.
-
-.PARAMETER OutputFormat
-
-Either 'John' for John the Ripper style hash formatting, or 'Hashcat' for Hashcat format.
-Defaults to 'Hashcat'.
-
-.PARAMETER Credential
-
-A [Management.Automation.PSCredential] object of alternate credentials
-for connection to the target domain.
-
-.EXAMPLE
-
-Invoke-Kerberoast | fl
-
-Kerberoasts all found SPNs for the current domain, outputting to Hashcat format (default).
-
-.EXAMPLE
-
-Invoke-Kerberoast -Domain dev.testlab.local | fl
-
-Kerberoasts all found SPNs for the testlab.local domain, outputting to JTR
-format instead of Hashcat.
-
-.EXAMPLE
-
-$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -orce
-$Cred = New-Object System.Management.Automation.PSCredential('TESTLB\dfm.a', $SecPassword)
-Invoke-Kerberoast -Credential $Cred -Verbose -Domain testlab.local | fl
-
-Kerberoasts all found SPNs for the testlab.local domain using alternate credentials.
-
-.OUTPUTS
-
-PowerView.SPNTicket
-
-Outputs a custom object containing the SamAccountName, ServicePrincipalName, and encrypted ticket section.
-#>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.SPNTicket')]
+    [OutputType('pView.SPNTicket')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -3002,7 +2477,7 @@ One of more paths to enumerate ACLs for.
 
 .OUTPUTS
 
-PowerView.FileACL
+pView.FileACL
 
 A custom object with the full path and associated ACL entries.
 
@@ -3012,7 +2487,7 @@ https://support.microsoft.com/en-us/kb/305144
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.FileACL')]
+    [OutputType('pView.FileACL')]
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -3112,7 +2587,7 @@ https://support.microsoft.com/en-us/kb/305144
                     $Out | Add-Member Noteproperty 'IdentityReference' $Name
                     $Out | Add-Member Noteproperty 'IdentitySID' $SID
                     $Out | Add-Member Noteproperty 'AccessControlType' $_.AccessControlType
-                    $Out.PSObject.TypeNames.Insert(0, 'PowerView.FileACL')
+                    $Out.PSObject.TypeNames.Insert(0, 'pView.FileACL')
                     $Out
                 }
             }
@@ -3764,13 +3239,13 @@ Retrieves the DNS zones for the dev.testlab.local domain, binding to primary.tes
 
 .OUTPUTS
 
-PowerView.DNSZone
+pView.DNSZone
 
 Outputs custom PSObjects with detailed information about the DNS zone.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.DNSZone')]
+    [OutputType('pView.DNSZone')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True)]
@@ -3822,7 +3297,7 @@ Outputs custom PSObjects with detailed information about the DNS zone.
             $Results | Where-Object {$_} | ForEach-Object {
                 $Out = Convert-LDAPProperty -Properties $_.Properties
                 $Out | Add-Member NoteProperty 'ZoneName' $Out.name
-                $Out.PSObject.TypeNames.Insert(0, 'PowerView.DNSZone')
+                $Out.PSObject.TypeNames.Insert(0, 'pView.DNSZone')
                 $Out
             }
 
@@ -3845,7 +3320,7 @@ Outputs custom PSObjects with detailed information about the DNS zone.
                 $Results | Where-Object {$_} | ForEach-Object {
                     $Out = Convert-LDAPProperty -Properties $_.Properties
                     $Out | Add-Member NoteProperty 'ZoneName' $Out.name
-                    $Out.PSObject.TypeNames.Insert(0, 'PowerView.DNSZone')
+                    $Out.PSObject.TypeNames.Insert(0, 'pView.DNSZone')
                     $Out
                 }
                 if ($Results) {
@@ -3933,13 +3408,13 @@ Retrieve all records for all zones in the dev.testlab.local domain.
 
 .OUTPUTS
 
-PowerView.DNSRecord
+pView.DNSRecord
 
 Outputs custom PSObjects with detailed information about the DNS record entry.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.DNSRecord')]
+    [OutputType('pView.DNSRecord')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0,  Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -4013,7 +3488,7 @@ Outputs custom PSObjects with detailed information about the DNS record entry.
                         }
                     }
 
-                    $Out.PSObject.TypeNames.Insert(0, 'PowerView.DNSRecord')
+                    $Out.PSObject.TypeNames.Insert(0, 'pView.DNSRecord')
                     $Out
                 }
                 catch {
@@ -4195,7 +3670,7 @@ Get-DomainController -Credential $Cred
 
 .OUTPUTS
 
-PowerView.Computer
+pView.Computer
 
 Outputs custom PSObjects with details about the enumerated domain controller if -LDAP is specified.
 
@@ -4205,7 +3680,7 @@ If -LDAP isn't specified.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.Computer')]
+    [OutputType('pView.Computer')]
     [OutputType('System.DirectoryServices.ActiveDirectory.DomainController')]
     [CmdletBinding()]
     Param(
@@ -4638,7 +4113,7 @@ Specifies an array of property names to diff against the class schema.
 
 .PARAMETER ReferenceObject
 
-Specicifes the PowerView user/group/computer object to extract property names
+Specicifes the pView user/group/computer object to extract property names
 from to use as the reference set.
 
 .PARAMETER Domain
@@ -4699,13 +4174,13 @@ Enumerates computers in the current domain with 'outlier' properties filled in.
 
 .OUTPUTS
 
-PowerView.PropertyOutlier
+pView.PropertyOutlier
 
 Custom PSObject with translated object property outliers.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.PropertyOutlier')]
+    [OutputType('pView.PropertyOutlier')]
     [CmdletBinding(DefaultParameterSetName = 'ClassName')]
     Param(
         [Parameter(Position = 0, Mandatory = $True, ParameterSetName = 'ClassName')]
@@ -4843,7 +4318,7 @@ Custom PSObject with translated object property outliers.
                     $Out | Add-Member Noteproperty 'SamAccountName' $Object.SamAccountName
                     $Out | Add-Member Noteproperty 'Property' $ObjectProperty
                     $Out | Add-Member Noteproperty 'Value' $Object.$ObjectProperty
-                    $Out.PSObject.TypeNames.Insert(0, 'PowerView.PropertyOutlier')
+                    $Out.PSObject.TypeNames.Insert(0, 'pView.PropertyOutlier')
                     $Out
                 }
             }
@@ -5033,19 +4508,19 @@ String
 
 .OUTPUTS
 
-PowerView.User
+pView.User
 
 Custom PSObject with translated user property fields.
 
-PowerView.User.Raw
+pView.User.Raw
 
 The raw DirectoryServices.SearchResult object, if -Raw is enabled.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.User')]
-    [OutputType('PowerView.User.Raw')]
+    [OutputType('pView.User')]
+    [OutputType('pView.User.Raw')]
     [CmdletBinding(DefaultParameterSetName = 'AllowDelegation')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -5255,11 +4730,11 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                 if ($PSBoundParameters['Raw']) {
                     # return raw result objects
                     $User = $_
-                    $User.PSObject.TypeNames.Insert(0, 'PowerView.User.Raw')
+                    $User.PSObject.TypeNames.Insert(0, 'pView.User.Raw')
                 }
                 else {
                     $User = Convert-LDAPProperty -Properties $_.Properties
-                    $User.PSObject.TypeNames.Insert(0, 'PowerView.User')
+                    $User.PSObject.TypeNames.Insert(0, 'pView.User')
                 }
                 $User
             }
@@ -5619,9 +5094,9 @@ Return a max of 1000 logon events from the specified machine using the specified
 
 .OUTPUTS
 
-PowerView.LogonEvent
+pView.LogonEvent
 
-PowerView.ExplicitCredentialLogonEvent
+pView.ExplicitCredentialLogonEvent
 
 .LINK
 
@@ -5629,8 +5104,8 @@ http://www.sixdub.net/2014/11/07/offensive-event-parsing-bringing-home-trophies/
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.LogonEvent')]
-    [OutputType('PowerView.ExplicitCredentialLogonEvent')]
+    [OutputType('pView.LogonEvent')]
+    [OutputType('pView.ExplicitCredentialLogonEvent')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -5773,7 +5248,7 @@ http://www.sixdub.net/2014/11/07/offensive-event-parsing-bringing-home-trophies/
                                 TargetLinkedLogonId       = $Properties[25].Value
                                 ElevatedToken             = $Properties[26].Value
                             }
-                            $Output.PSObject.TypeNames.Insert(0, 'PowerView.LogonEvent')
+                            $Output.PSObject.TypeNames.Insert(0, 'pView.LogonEvent')
                             $Output
                         }
                     }
@@ -5801,7 +5276,7 @@ http://www.sixdub.net/2014/11/07/offensive-event-parsing-bringing-home-trophies/
                                 IpAddress         = $Properties[12].Value
                                 IpPort            = $Properties[13].Value
                             }
-                            $Output.PSObject.TypeNames.Insert(0, 'PowerView.ExplicitCredentialLogonEvent')
+                            $Output.PSObject.TypeNames.Insert(0, 'pView.ExplicitCredentialLogonEvent')
                             $Output
                         }
                     }
@@ -6112,17 +5587,17 @@ Get-DomainComputer -Credential $Cred
 
 .OUTPUTS
 
-PowerView.Computer
+pView.Computer
 
 Custom PSObject with translated computer property fields.
 
-PowerView.Computer.Raw
+pView.Computer.Raw
 
 The raw DirectoryServices.SearchResult object, if -Raw is enabled.
 #>
 
-    [OutputType('PowerView.Computer')]
-    [OutputType('PowerView.Computer.Raw')]
+    [OutputType('pView.Computer')]
+    [OutputType('pView.Computer.Raw')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -6338,11 +5813,11 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                     if ($PSBoundParameters['Raw']) {
                         # return raw result objects
                         $Computer = $_
-                        $Computer.PSObject.TypeNames.Insert(0, 'PowerView.Computer.Raw')
+                        $Computer.PSObject.TypeNames.Insert(0, 'pView.Computer.Raw')
                     }
                     else {
                         $Computer = Convert-LDAPProperty -Properties $_.Properties
-                        $Computer.PSObject.TypeNames.Insert(0, 'PowerView.Computer')
+                        $Computer.PSObject.TypeNames.Insert(0, 'pView.Computer')
                     }
                     $Computer
                 }
@@ -6487,18 +5962,18 @@ CN=Domain Admins,CN=Users,DC=dev,DC=testlab,DC=local
 
 .OUTPUTS
 
-PowerView.ADObject
+pView.ADObject
 
 Custom PSObject with translated AD object property fields.
 
-PowerView.ADObject.Raw
+pView.ADObject.Raw
 
 The raw DirectoryServices.SearchResult object, if -Raw is enabled.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.ADObject')]
-    [OutputType('PowerView.ADObject.Raw')]
+    [OutputType('pView.ADObject')]
+    [OutputType('pView.ADObject.Raw')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -6665,11 +6140,11 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                 if ($PSBoundParameters['Raw']) {
                     # return raw result objects
                     $Object = $_
-                    $Object.PSObject.TypeNames.Insert(0, 'PowerView.ADObject.Raw')
+                    $Object.PSObject.TypeNames.Insert(0, 'pView.ADObject.Raw')
                 }
                 else {
                     $Object = Convert-LDAPProperty -Properties $_.Properties
-                    $Object.PSObject.TypeNames.Insert(0, 'PowerView.ADObject')
+                    $Object.PSObject.TypeNames.Insert(0, 'pView.ADObject')
                 }
                 $Object
             }
@@ -6783,7 +6258,7 @@ LastOriginatingDsaDN  : CN=NTDS Settings,CN=PRIMARY,CN=Servers,CN=Default-First
 
 .OUTPUTS
 
-PowerView.ADObjectAttributeHistory
+pView.ADObjectAttributeHistory
 
 Custom PSObject with translated replication metadata fields.
 
@@ -6793,7 +6268,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-1-when-did-the-deleg
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.ADObjectAttributeHistory')]
+    [OutputType('pView.ADObjectAttributeHistory')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -6886,7 +6361,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-1-when-did-the-deleg
                         $Output | Add-Member NoteProperty 'LastOriginatingChange' $TempObject.ftimeLastOriginatingChange
                         $Output | Add-Member NoteProperty 'Version' $TempObject.dwVersion
                         $Output | Add-Member NoteProperty 'LastOriginatingDsaDN' $TempObject.pszLastOriginatingDsaDN
-                        $Output.PSObject.TypeNames.Insert(0, 'PowerView.ADObjectAttributeHistory')
+                        $Output.PSObject.TypeNames.Insert(0, 'pView.ADObjectAttributeHistory')
                         $Output
                     }
                 }
@@ -7046,7 +6521,7 @@ LastOriginatingDsaDN  : CN=NTDS Settings,CN=PRIMARY,CN=Servers,CN=Default-First
 
 .OUTPUTS
 
-PowerView.ADObjectLinkedAttributeHistory
+pView.ADObjectLinkedAttributeHistory
 
 Custom PSObject with translated replication metadata fields.
 
@@ -7056,7 +6531,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admi
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.ADObjectLinkedAttributeHistory')]
+    [OutputType('pView.ADObjectLinkedAttributeHistory')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -7151,7 +6626,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admi
                         $Output | Add-Member NoteProperty 'LastOriginatingChange' $TempObject.ftimeLastOriginatingChange
                         $Output | Add-Member NoteProperty 'Version' $TempObject.dwVersion
                         $Output | Add-Member NoteProperty 'LastOriginatingDsaDN' $TempObject.pszLastOriginatingDsaDN
-                        $Output.PSObject.TypeNames.Insert(0, 'PowerView.ADObjectLinkedAttributeHistory')
+                        $Output.PSObject.TypeNames.Insert(0, 'pView.ADObjectLinkedAttributeHistory')
                         $Output
                     }
                 }
@@ -7475,12 +6950,12 @@ Gets the logonhours array from the first AD user with logon restrictions.
 
 .OUTPUTS
 
-PowerView.LogonHours
+pView.LogonHours
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.LogonHours')]
+    [OutputType('pView.LogonHours')]
     [CmdletBinding()]
     Param (
         [Parameter( ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -7532,7 +7007,7 @@ PowerView.LogonHours
         }
 
         $Output = New-Object PSObject -Property $Output
-        $Output.PSObject.TypeNames.Insert(0, 'PowerView.LogonHours')
+        $Output.PSObject.TypeNames.Insert(0, 'pView.LogonHours')
         $Output
     }
 }
@@ -8052,13 +7527,13 @@ Get-DomainObjectAcl -Credential $Cred -ResolveGUIDs
 
 .OUTPUTS
 
-PowerView.ACL
+pView.ACL
 
 Custom PSObject with ACL entries.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ACL')]
+    [OutputType('pView.ACL')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -8248,11 +7723,11 @@ Custom PSObject with ACL entries.
                                     }
                                 }
                                 $OutObject = New-Object -TypeName PSObject -Property $AclProperties
-                                $OutObject.PSObject.TypeNames.Insert(0, 'PowerView.ACL')
+                                $OutObject.PSObject.TypeNames.Insert(0, 'pView.ACL')
                                 $OutObject
                             }
                             else {
-                                $_.PSObject.TypeNames.Insert(0, 'PowerView.ACL')
+                                $_.PSObject.TypeNames.Insert(0, 'pView.ACL')
                                 $_
                             }
                         }
@@ -8960,13 +8435,13 @@ Find-InterestingDomainAcl -Credential $Cred -ResolveGUIDs
 
 .OUTPUTS
 
-PowerView.ACL
+pView.ACL
 
 Custom PSObject with ACL entries.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ACL')]
+    [OutputType('pView.ACL')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -9258,13 +8733,13 @@ Get-DomainOU -Credential $Cred
 
 .OUTPUTS
 
-PowerView.OU
+pView.OU
 
 Custom PSObject with translated OU property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.OU')]
+    [OutputType('pView.OU')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -9403,7 +8878,7 @@ Custom PSObject with translated OU property fields.
                 else {
                     $OU = Convert-LDAPProperty -Properties $_.Properties
                 }
-                $OU.PSObject.TypeNames.Insert(0, 'PowerView.OU')
+                $OU.PSObject.TypeNames.Insert(0, 'pView.OU')
                 $OU
             }
             if ($Results) {
@@ -9526,13 +9001,13 @@ Get-DomainSite -Credential $Cred
 
 .OUTPUTS
 
-PowerView.Site
+pView.Site
 
 Custom PSObject with translated site property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.Site')]
+    [OutputType('pView.Site')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -9673,7 +9148,7 @@ Custom PSObject with translated site property fields.
                 else {
                     $Site = Convert-LDAPProperty -Properties $_.Properties
                 }
-                $Site.PSObject.TypeNames.Insert(0, 'PowerView.Site')
+                $Site.PSObject.TypeNames.Insert(0, 'pView.Site')
                 $Site
             }
             if ($Results) {
@@ -9796,13 +9271,13 @@ Get-DomainSubnet -Credential $Cred
 
 .OUTPUTS
 
-PowerView.Subnet
+pView.Subnet
 
 Custom PSObject with translated subnet property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.Subnet')]
+    [OutputType('pView.Subnet')]
     [CmdletBinding()]
     Param (
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -9937,7 +9412,7 @@ Custom PSObject with translated subnet property fields.
                 else {
                     $Subnet = Convert-LDAPProperty -Properties $_.Properties
                 }
-                $Subnet.PSObject.TypeNames.Insert(0, 'PowerView.Subnet')
+                $Subnet.PSObject.TypeNames.Insert(0, 'pView.Subnet')
 
                 if ($PSBoundParameters['SiteName']) {
                     # have to do the filtering after the LDAP query as LDAP doesn't let you specify
@@ -10236,14 +9711,14 @@ CN=Domain Admins,CN=Users,DC=dev,DC=testlab,DC=local
 
 .OUTPUTS
 
-PowerView.Group
+pView.Group
 
 Custom PSObject with translated group property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.Group')]
+    [OutputType('pView.Group')]
     [CmdletBinding(DefaultParameterSetName = 'AllowDelegation')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -10366,7 +9841,7 @@ Custom PSObject with translated group property fields.
                             if ($OldProperties) { $SearcherArguments['Properties'] = $OldProperties }
                             $Group = Get-DomainObject @SearcherArguments
                             if ($Group) {
-                                $Group.PSObject.TypeNames.Insert(0, 'PowerView.Group')
+                                $Group.PSObject.TypeNames.Insert(0, 'pView.Group')
                                 $Group
                             }
                         }
@@ -10463,7 +9938,7 @@ Custom PSObject with translated group property fields.
                     else {
                         $Group = Convert-LDAPProperty -Properties $_.Properties
                     }
-                    $Group.PSObject.TypeNames.Insert(0, 'PowerView.Group')
+                    $Group.PSObject.TypeNames.Insert(0, 'pView.Group')
                     $Group
                 }
                 if ($Results) {
@@ -10673,19 +10148,19 @@ for connection to the target domain.
 
 .EXAMPLE
 
-Get-DomainManagedSecurityGroup | Export-PowerViewCSV -NoTypeInformation group-managers.csv
+Get-DomainManagedSecurityGroup | Export-pViewCSV -NoTypeInformation group-managers.csv
 
 Store a list of all security groups with managers in group-managers.csv
 
 .OUTPUTS
 
-PowerView.ManagedSecurityGroup
+pView.ManagedSecurityGroup
 
 A custom PSObject describing the managed security group.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ManagedSecurityGroup')]
+    [OutputType('pView.ManagedSecurityGroup')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -10797,7 +10272,7 @@ A custom PSObject describing the managed security group.
 
             $ManagedGroup | Add-Member Noteproperty 'ManagerCanWrite' 'UNKNOWN'
 
-            $ManagedGroup.PSObject.TypeNames.Insert(0, 'PowerView.ManagedSecurityGroup')
+            $ManagedGroup.PSObject.TypeNames.Insert(0, 'pView.ManagedSecurityGroup')
             $ManagedGroup
         }
     }
@@ -11004,7 +10479,7 @@ MemberSID               : S-1-5-21-339048670-1233568108-4141518690-500
 
 .OUTPUTS
 
-PowerView.GroupMember
+pView.GroupMember
 
 Custom PSObject with translated group member property fields.
 
@@ -11015,7 +10490,7 @@ http://www.powershellmagazine.com/2013/05/23/pstip-retrieve-group-membership-of-
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.GroupMember')]
+    [OutputType('pView.GroupMember')]
     [CmdletBinding(DefaultParameterSetName = 'None')]
     Param(
         [Parameter(Position = 0, Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -11331,7 +10806,7 @@ http://www.powershellmagazine.com/2013/05/23/pstip-retrieve-group-membership-of-
                     $GroupMember | Add-Member Noteproperty 'MemberDistinguishedName' $MemberDN
                     $GroupMember | Add-Member Noteproperty 'MemberObjectClass' $MemberObjectClass
                     $GroupMember | Add-Member Noteproperty 'MemberSID' $MemberSID
-                    $GroupMember.PSObject.TypeNames.Insert(0, 'PowerView.GroupMember')
+                    $GroupMember.PSObject.TypeNames.Insert(0, 'pView.GroupMember')
                     $GroupMember
 
                     # if we're doing manual recursion
@@ -11447,7 +10922,7 @@ LastOriginatingDsaDN  : CN=NTDS Settings,CN=PRIMARY,CN=Servers,CN=Default-First
 
 .OUTPUTS
 
-PowerView.DomainGroupMemberDeleted
+pView.DomainGroupMemberDeleted
 
 Custom PSObject with translated replication metadata fields.
 
@@ -11457,7 +10932,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admi
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.DomainGroupMemberDeleted')]
+    [OutputType('pView.DomainGroupMemberDeleted')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -11541,7 +11016,7 @@ https://blogs.technet.microsoft.com/pie/2014/08/25/metadata-2-the-ephemeral-admi
                         $Output | Add-Member NoteProperty 'LastOriginatingChange' $TempObject.ftimeLastOriginatingChange
                         $Output | Add-Member NoteProperty 'TimesAdded' ($TempObject.dwVersion / 2)
                         $Output | Add-Member NoteProperty 'LastOriginatingDsaDN' $TempObject.pszLastOriginatingDsaDN
-                        $Output.PSObject.TypeNames.Insert(0, 'PowerView.DomainGroupMemberDeleted')
+                        $Output.PSObject.TypeNames.Insert(0, 'pView.DomainGroupMemberDeleted')
                         $Output
                     }
                 }
@@ -12616,11 +12091,11 @@ for connection to the remote system.
 
 .OUTPUTS
 
-PowerView.GroupsXML
+pView.GroupsXML
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.GroupsXML')]
+    [OutputType('pView.GroupsXML')]
     [CmdletBinding()]
     Param (
         [Parameter(Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -12703,7 +12178,7 @@ PowerView.GroupsXML
                     $GroupsXML | Add-Member Noteproperty 'GroupSID' $GroupSID
                     $GroupsXML | Add-Member Noteproperty 'GroupMemberOf' $Null
                     $GroupsXML | Add-Member Noteproperty 'GroupMembers' $Members
-                    $GroupsXML.PSObject.TypeNames.Insert(0, 'PowerView.GroupsXML')
+                    $GroupsXML.PSObject.TypeNames.Insert(0, 'pView.GroupsXML')
                     $GroupsXML
                 }
             }
@@ -12838,19 +12313,19 @@ Get-DomainGPO -Credential $Cred
 
 .OUTPUTS
 
-PowerView.GPO
+pView.GPO
 
 Custom PSObject with translated GPO property fields.
 
-PowerView.GPO.Raw
+pView.GPO.Raw
 
 The raw DirectoryServices.SearchResult object, if -Raw is enabled.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
-    [OutputType('PowerView.GPO')]
-    [OutputType('PowerView.GPO.Raw')]
+    [OutputType('pView.GPO')]
+    [OutputType('pView.GPO.Raw')]
     [CmdletBinding(DefaultParameterSetName = 'None')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -13060,10 +12535,10 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                     $SearcherArguments['LDAPFilter'] = "(objectCategory=groupPolicyContainer)"
                     Get-DomainObject @SearcherArguments | ForEach-Object {
                         if ($PSBoundParameters['Raw']) {
-                            $_.PSObject.TypeNames.Insert(0, 'PowerView.GPO.Raw')
+                            $_.PSObject.TypeNames.Insert(0, 'pView.GPO.Raw')
                         }
                         else {
-                            $_.PSObject.TypeNames.Insert(0, 'PowerView.GPO')
+                            $_.PSObject.TypeNames.Insert(0, 'pView.GPO')
                         }
                         $_
                     }
@@ -13119,7 +12594,7 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                     if ($PSBoundParameters['Raw']) {
                         # return raw result objects
                         $GPO = $_
-                        $GPO.PSObject.TypeNames.Insert(0, 'PowerView.GPO.Raw')
+                        $GPO.PSObject.TypeNames.Insert(0, 'pView.GPO.Raw')
                     }
                     else {
                         if ($PSBoundParameters['SearchBase'] -and ($SearchBase -Match '^GC://')) {
@@ -13137,7 +12612,7 @@ The raw DirectoryServices.SearchResult object, if -Raw is enabled.
                         else {
                             $GPO = Convert-LDAPProperty -Properties $_.Properties
                         }
-                        $GPO.PSObject.TypeNames.Insert(0, 'PowerView.GPO')
+                        $GPO.PSObject.TypeNames.Insert(0, 'pView.GPO')
                     }
                     $GPO
                 }
@@ -13258,7 +12733,7 @@ https://morgansimonsenblog.azurewebsites.net/tag/groups/
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.GPOGroup')]
+    [OutputType('pView.GPOGroup')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -13428,7 +12903,7 @@ https://morgansimonsenblog.azurewebsites.net/tag/groups/
                     $GPOGroup | Add-Member Noteproperty 'GroupSID' $GroupSID
                     $GPOGroup | Add-Member Noteproperty 'GroupMemberOf' $Membership.Value.Memberof
                     $GPOGroup | Add-Member Noteproperty 'GroupMembers' $Membership.Value.Members
-                    $GPOGroup.PSObject.TypeNames.Insert(0, 'PowerView.GPOGroup')
+                    $GPOGroup.PSObject.TypeNames.Insert(0, 'pView.GPOGroup')
                     $GPOGroup
                 }
             }
@@ -13468,7 +12943,7 @@ https://morgansimonsenblog.azurewebsites.net/tag/groups/
                 $_ | Add-Member Noteproperty 'GPODisplayName' $GPODisplayName
                 $_ | Add-Member Noteproperty 'GPOName' $GPOName
                 $_ | Add-Member Noteproperty 'GPOType' 'GroupPolicyPreferences'
-                $_.PSObject.TypeNames.Insert(0, 'PowerView.GPOGroup')
+                $_.PSObject.TypeNames.Insert(0, 'pView.GPOGroup')
                 $_
             }
         }
@@ -13571,7 +13046,7 @@ Get-DomainGPOUserLocalGroupMapping -Credential $Cred
 
 .OUTPUTS
 
-PowerView.GPOLocalGroupMapping
+pView.GPOLocalGroupMapping
 
 A custom PSObject containing any target identity information and what local
 group memberships they're a part of through GPO correlation.
@@ -13582,7 +13057,7 @@ http://www.harmj0y.net/blog/redteaming/where-my-admins-at-gpo-edition/
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.GPOUserLocalGroupMapping')]
+    [OutputType('pView.GPOUserLocalGroupMapping')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -13744,7 +13219,7 @@ http://www.harmj0y.net/blog/redteaming/where-my-admins-at-gpo-edition/
                         $GPOLocalGroupMapping | Add-Member Noteproperty 'GPOType' $GPOType
                         $GPOLocalGroupMapping | Add-Member Noteproperty 'ContainerName' $_.Properties.distinguishedname
                         $GPOLocalGroupMapping | Add-Member Noteproperty 'ComputerName' $OUComputers
-                        $GPOLocalGroupMapping.PSObject.TypeNames.Insert(0, 'PowerView.GPOLocalGroupMapping')
+                        $GPOLocalGroupMapping.PSObject.TypeNames.Insert(0, 'pView.GPOLocalGroupMapping')
                         $GPOLocalGroupMapping
                     }
                 }
@@ -13769,7 +13244,7 @@ http://www.harmj0y.net/blog/redteaming/where-my-admins-at-gpo-edition/
                     $GPOLocalGroupMapping | Add-Member Noteproperty 'GPOType' $GPOType
                     $GPOLocalGroupMapping | Add-Member Noteproperty 'ContainerName' $_.distinguishedname
                     $GPOLocalGroupMapping | Add-Member Noteproperty 'ComputerName' $_.siteobjectbl
-                    $GPOLocalGroupMapping.PSObject.TypeNames.Add('PowerView.GPOLocalGroupMapping')
+                    $GPOLocalGroupMapping.PSObject.TypeNames.Add('pView.GPOLocalGroupMapping')
                     $GPOLocalGroupMapping
                 }
             }
@@ -13871,11 +13346,11 @@ Get-DomainGPOComputerLocalGroupMapping -Credential $Cred -ComputerIdentity SQL.t
 
 .OUTPUTS
 
-PowerView.GGPOComputerLocalGroupMember
+pView.GGPOComputerLocalGroupMember
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.GGPOComputerLocalGroupMember')]
+    [OutputType('pView.GGPOComputerLocalGroupMember')]
     [CmdletBinding(DefaultParameterSetName = 'ComputerIdentity')]
     Param(
         [Parameter(Position = 0, ParameterSetName = 'ComputerIdentity', Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -13995,7 +13470,7 @@ PowerView.GGPOComputerLocalGroupMember
                         $GPOComputerLocalGroupMember | Add-Member Noteproperty 'GPOGuid' $GPOGroup.GPOName
                         $GPOComputerLocalGroupMember | Add-Member Noteproperty 'GPOPath' $GPOGroup.GPOPath
                         $GPOComputerLocalGroupMember | Add-Member Noteproperty 'GPOType' $GPOGroup.GPOType
-                        $GPOComputerLocalGroupMember.PSObject.TypeNames.Add('PowerView.GPOComputerLocalGroupMember')
+                        $GPOComputerLocalGroupMember.PSObject.TypeNames.Add('pView.GPOComputerLocalGroupMember')
                         $GPOComputerLocalGroupMember
                     }
                 }
@@ -14236,11 +13711,11 @@ primary.testlab.local         Backup Operators              Backup Operators can
 
 .OUTPUTS
 
-PowerView.LocalGroup.API
+pView.LocalGroup.API
 
 Custom PSObject with translated group property fields from API results.
 
-PowerView.LocalGroup.WinNT
+pView.LocalGroup.WinNT
 
 Custom PSObject with translated group property fields from WinNT results.
 
@@ -14250,8 +13725,8 @@ https://msdn.microsoft.com/en-us/library/windows/desktop/aa370440(v=vs.85).aspx
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.LocalGroup.API')]
-    [OutputType('PowerView.LocalGroup.WinNT')]
+    [OutputType('pView.LocalGroup.API')]
+    [OutputType('pView.LocalGroup.WinNT')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -14313,7 +13788,7 @@ https://msdn.microsoft.com/en-us/library/windows/desktop/aa370440(v=vs.85).aspx
                         $LocalGroup | Add-Member Noteproperty 'ComputerName' $Computer
                         $LocalGroup | Add-Member Noteproperty 'GroupName' $Info.lgrpi1_name
                         $LocalGroup | Add-Member Noteproperty 'Comment' $Info.lgrpi1_comment
-                        $LocalGroup.PSObject.TypeNames.Insert(0, 'PowerView.LocalGroup.API')
+                        $LocalGroup.PSObject.TypeNames.Insert(0, 'pView.LocalGroup.API')
                         $LocalGroup
                     }
                     # free up the result buffer
@@ -14334,7 +13809,7 @@ https://msdn.microsoft.com/en-us/library/windows/desktop/aa370440(v=vs.85).aspx
                     $Group | Add-Member Noteproperty 'GroupName' ($LocalGroup.InvokeGet('Name'))
                     $Group | Add-Member Noteproperty 'SID' ((New-Object System.Security.Principal.SecurityIdentifier($LocalGroup.InvokeGet('objectsid'),0)).Value)
                     $Group | Add-Member Noteproperty 'Comment' ($LocalGroup.InvokeGet('Description'))
-                    $Group.PSObject.TypeNames.Insert(0, 'PowerView.LocalGroup.WinNT')
+                    $Group.PSObject.TypeNames.Insert(0, 'pView.LocalGroup.WinNT')
                     $Group
                 }
             }
@@ -14436,11 +13911,11 @@ primary.tes... Administrators TESTLAB\Dom... S-1-5-21-89...           True      
 
 .OUTPUTS
 
-PowerView.LocalGroupMember.API
+pView.LocalGroupMember.API
 
 Custom PSObject with translated group property fields from API results.
 
-PowerView.LocalGroupMember.WinNT
+pView.LocalGroupMember.WinNT
 
 Custom PSObject with translated group property fields from WinNT results.
 
@@ -14452,8 +13927,8 @@ https://msdn.microsoft.com/en-us/library/windows/desktop/aa370601(v=vs.85).aspx
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.LocalGroupMember.API')]
-    [OutputType('PowerView.LocalGroupMember.WinNT')]
+    [OutputType('pView.LocalGroupMember.API')]
+    [OutputType('pView.LocalGroupMember.WinNT')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Alias('HostName', 'dnshostname', 'name')]
@@ -14531,7 +14006,7 @@ https://msdn.microsoft.com/en-us/library/windows/desktop/aa370601(v=vs.85).aspx
                             $Member | Add-Member Noteproperty 'SID' $SidString
                             $IsGroup = $($Info.lgrmi2_sidusage -eq 'SidTypeGroup')
                             $Member | Add-Member Noteproperty 'IsGroup' $IsGroup
-                            $Member.PSObject.TypeNames.Insert(0, 'PowerView.LocalGroupMember.API')
+                            $Member.PSObject.TypeNames.Insert(0, 'pView.LocalGroupMember.API')
                             $Members += $Member
                         }
                     }
@@ -14717,7 +14192,7 @@ Get-NetShare -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.ShareInfo
+pView.ShareInfo
 
 A PSCustomObject representing a SHARE_INFO_1 structure, including
 the name/type/remark for each share, with the ComputerName added.
@@ -14727,7 +14202,7 @@ the name/type/remark for each share, with the ComputerName added.
 http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-win32-functions-in-memory/
 #>
 
-    [OutputType('PowerView.ShareInfo')]
+    [OutputType('pView.ShareInfo')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -14777,7 +14252,7 @@ http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-w
                     # return all the sections of the structure - have to do it this way for V2
                     $Share = $Info | Select-Object *
                     $Share | Add-Member Noteproperty 'ComputerName' $Computer
-                    $Share.PSObject.TypeNames.Insert(0, 'PowerView.ShareInfo')
+                    $Share.PSObject.TypeNames.Insert(0, 'pView.ShareInfo')
                     $Offset = $NewIntPtr.ToInt64()
                     $Offset += $Increment
                     $Share
@@ -14852,7 +14327,7 @@ Get-NetLoggedon -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.LoggedOnUserInfo
+pView.LoggedOnUserInfo
 
 A PSCustomObject representing a WKSTA_USER_INFO_1 structure, including
 the UserName/LogonDomain/AuthDomains/LogonServer for each user, with the ComputerName added.
@@ -14862,7 +14337,7 @@ the UserName/LogonDomain/AuthDomains/LogonServer for each user, with the Compute
 http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-win32-functions-in-memory/
 #>
 
-    [OutputType('PowerView.LoggedOnUserInfo')]
+    [OutputType('pView.LoggedOnUserInfo')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -14912,7 +14387,7 @@ http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-w
                     # return all the sections of the structure - have to do it this way for V2
                     $LoggedOn = $Info | Select-Object *
                     $LoggedOn | Add-Member Noteproperty 'ComputerName' $Computer
-                    $LoggedOn.PSObject.TypeNames.Insert(0, 'PowerView.LoggedOnUserInfo')
+                    $LoggedOn.PSObject.TypeNames.Insert(0, 'pView.LoggedOnUserInfo')
                     $Offset = $NewIntPtr.ToInt64()
                     $Offset += $Increment
                     $LoggedOn
@@ -14986,7 +14461,7 @@ Get-NetSession -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.SessionInfo
+pView.SessionInfo
 
 A PSCustomObject representing a WKSTA_USER_INFO_1 structure, including
 the CName/UserName/Time/IdleTime for each session, with the ComputerName added.
@@ -14996,7 +14471,7 @@ the CName/UserName/Time/IdleTime for each session, with the ComputerName added.
 http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-win32-functions-in-memory/
 #>
 
-    [OutputType('PowerView.SessionInfo')]
+    [OutputType('pView.SessionInfo')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15046,7 +14521,7 @@ http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-w
                     # return all the sections of the structure - have to do it this way for V2
                     $Session = $Info | Select-Object *
                     $Session | Add-Member Noteproperty 'ComputerName' $Computer
-                    $Session.PSObject.TypeNames.Insert(0, 'PowerView.SessionInfo')
+                    $Session.PSObject.TypeNames.Insert(0, 'pView.SessionInfo')
                     $Offset = $NewIntPtr.ToInt64()
                     $Offset += $Increment
                     $Session
@@ -15128,14 +14603,14 @@ Get-RegLoggedOn -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.RegLoggedOnUser
+pView.RegLoggedOnUser
 
 A PSCustomObject including the UserDomain/UserName/UserSID of each
 actively logged on user, with the ComputerName added.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.RegLoggedOnUser')]
+    [OutputType('pView.RegLoggedOnUser')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15174,7 +14649,7 @@ actively logged on user, with the ComputerName added.
                     $RegLoggedOnUser | Add-Member Noteproperty 'UserDomain' $UserDomain
                     $RegLoggedOnUser | Add-Member Noteproperty 'UserName' $UserName
                     $RegLoggedOnUser | Add-Member Noteproperty 'UserSID' $_
-                    $RegLoggedOnUser.PSObject.TypeNames.Insert(0, 'PowerView.RegLoggedOnUser')
+                    $RegLoggedOnUser.PSObject.TypeNames.Insert(0, 'pView.RegLoggedOnUser')
                     $RegLoggedOnUser
                 }
             }
@@ -15247,7 +14722,7 @@ Get-NetRDPSession -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.RDPSessionInfo
+pView.RDPSessionInfo
 
 A PSCustomObject representing a combined WTS_SESSION_INFO_1 and WTS_CLIENT_ADDRESS structure,
 with the ComputerName added.
@@ -15257,7 +14732,7 @@ with the ComputerName added.
 https://msdn.microsoft.com/en-us/library/aa383861(v=vs.85).aspx
 #>
 
-    [OutputType('PowerView.RDPSessionInfo')]
+    [OutputType('pView.RDPSessionInfo')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15355,7 +14830,7 @@ https://msdn.microsoft.com/en-us/library/aa383861(v=vs.85).aspx
                             }
 
                             $RDPSession | Add-Member Noteproperty 'SourceIP' $SourceIP
-                            $RDPSession.PSObject.TypeNames.Insert(0, 'PowerView.RDPSessionInfo')
+                            $RDPSession.PSObject.TypeNames.Insert(0, 'pView.RDPSessionInfo')
                             $RDPSession
 
                             # free up the memory buffer
@@ -15438,7 +14913,7 @@ Test-AdminAccess -ComputerName sqlserver -Credential $Cred
 
 .OUTPUTS
 
-PowerView.AdminAccess
+pView.AdminAccess
 
 A PSCustomObject containing the ComputerName and 'IsAdmin' set to whether
 the current user has local admin rights, along with the ComputerName added.
@@ -15449,7 +14924,7 @@ https://github.com/rapid7/metasploit-framework/blob/master/modules/post/windows/
 http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-win32-functions-in-memory/
 #>
 
-    [OutputType('PowerView.AdminAccess')]
+    [OutputType('pView.AdminAccess')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15487,7 +14962,7 @@ http://www.powershellmagazine.com/2014/09/25/easily-defining-enums-structs-and-w
                 Write-Verbose "[Test-AdminAccess] Error: $(([ComponentModel.Win32Exception] $LastError).Message)"
                 $IsAdmin | Add-Member Noteproperty 'IsAdmin' $False
             }
-            $IsAdmin.PSObject.TypeNames.Insert(0, 'PowerView.AdminAccess')
+            $IsAdmin.PSObject.TypeNames.Insert(0, 'pView.AdminAccess')
             $IsAdmin
         }
     }
@@ -15545,12 +15020,12 @@ Get-NetComputerSiteName -ComputerName WINDOWS1.testlab.local -Credential $Cred
 
 .OUTPUTS
 
-PowerView.ComputerSite
+pView.ComputerSite
 
 A PSCustomObject containing the ComputerName, IPAddress, and associated Site name.
 #>
 
-    [OutputType('PowerView.ComputerSite')]
+    [OutputType('pView.ComputerSite')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15597,7 +15072,7 @@ A PSCustomObject containing the ComputerName, IPAddress, and associated Site nam
                 Write-Verbose "[Get-NetComputerSiteName] Error: $(([ComponentModel.Win32Exception] $Result).Message)"
                 $ComputerSite | Add-Member Noteproperty 'SiteName' ''
             }
-            $ComputerSite.PSObject.TypeNames.Insert(0, 'PowerView.ComputerSite')
+            $ComputerSite.PSObject.TypeNames.Insert(0, 'pView.ComputerSite')
 
             # free up the result buffer
             $Null = $Netapi32::NetApiBufferFree($PtrInfo)
@@ -15665,12 +15140,12 @@ Accepts one or more computer name specification strings  on the pipeline (netbio
 
 .OUTPUTS
 
-PowerView.ProxySettings
+pView.ProxySettings
 
 Outputs custom PSObjects with the ComputerName, ProxyServer, AutoConfigURL, and WPAD contents.
 #>
 
-    [OutputType('PowerView.ProxySettings')]
+    [OutputType('pView.ProxySettings')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15720,7 +15195,7 @@ Outputs custom PSObjects with the ComputerName, ProxyServer, AutoConfigURL, and 
                     $Out | Add-Member Noteproperty 'ProxyServer' $ProxyServer
                     $Out | Add-Member Noteproperty 'AutoConfigURL' $AutoConfigURL
                     $Out | Add-Member Noteproperty 'Wpad' $Wpad
-                    $Out.PSObject.TypeNames.Insert(0, 'PowerView.ProxySettings')
+                    $Out.PSObject.TypeNames.Insert(0, 'pView.ProxySettings')
                     $Out
                 }
                 else {
@@ -15788,12 +15263,12 @@ Get-WMIRegLastLoggedOn -ComputerName PRIMARY.testlab.local -Credential $Cred
 
 .OUTPUTS
 
-PowerView.LastLoggedOnUser
+pView.LastLoggedOnUser
 
 A PSCustomObject containing the ComputerName and last loggedon user.
 #>
 
-    [OutputType('PowerView.LastLoggedOnUser')]
+    [OutputType('pView.LastLoggedOnUser')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15832,7 +15307,7 @@ A PSCustomObject containing the ComputerName and last loggedon user.
                 $LastLoggedOn = New-Object PSObject
                 $LastLoggedOn | Add-Member Noteproperty 'ComputerName' $Computer
                 $LastLoggedOn | Add-Member Noteproperty 'LastLoggedOn' $LastUser
-                $LastLoggedOn.PSObject.TypeNames.Insert(0, 'PowerView.LastLoggedOnUser')
+                $LastLoggedOn.PSObject.TypeNames.Insert(0, 'pView.LastLoggedOnUser')
                 $LastLoggedOn
             }
             catch {
@@ -15897,12 +15372,12 @@ Get-WMIRegCachedRDPConnection -ComputerName PRIMARY.testlab.local -Credential $C
 
 .OUTPUTS
 
-PowerView.CachedRDPConnection
+pView.CachedRDPConnection
 
 A PSCustomObject containing the ComputerName and cached RDP information.
 #>
 
-    [OutputType('PowerView.CachedRDPConnection')]
+    [OutputType('pView.CachedRDPConnection')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -15959,7 +15434,7 @@ A PSCustomObject containing the ComputerName and cached RDP information.
                                 $FoundConnection | Add-Member Noteproperty 'UserSID' $UserSID
                                 $FoundConnection | Add-Member Noteproperty 'TargetServer' $TargetServer
                                 $FoundConnection | Add-Member Noteproperty 'UsernameHint' $Null
-                                $FoundConnection.PSObject.TypeNames.Insert(0, 'PowerView.CachedRDPConnection')
+                                $FoundConnection.PSObject.TypeNames.Insert(0, 'pView.CachedRDPConnection')
                                 $FoundConnection
                             }
                         }
@@ -15977,7 +15452,7 @@ A PSCustomObject containing the ComputerName and cached RDP information.
                             $FoundConnection | Add-Member Noteproperty 'UserSID' $UserSID
                             $FoundConnection | Add-Member Noteproperty 'TargetServer' $Server
                             $FoundConnection | Add-Member Noteproperty 'UsernameHint' $UsernameHint
-                            $FoundConnection.PSObject.TypeNames.Insert(0, 'PowerView.CachedRDPConnection')
+                            $FoundConnection.PSObject.TypeNames.Insert(0, 'pView.CachedRDPConnection')
                             $FoundConnection
                         }
                     }
@@ -16046,12 +15521,12 @@ Get-WMIRegMountedDrive -ComputerName PRIMARY.testlab.local -Credential $Cred
 
 .OUTPUTS
 
-PowerView.RegMountedDrive
+pView.RegMountedDrive
 
 A PSCustomObject containing the ComputerName and mounted drive information.
 #>
 
-    [OutputType('PowerView.RegMountedDrive')]
+    [OutputType('pView.RegMountedDrive')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -16111,7 +15586,7 @@ A PSCustomObject containing the ComputerName and mounted drive information.
                                 $MountedDrive | Add-Member Noteproperty 'ProviderName' $ProviderName
                                 $MountedDrive | Add-Member Noteproperty 'RemotePath' $RemotePath
                                 $MountedDrive | Add-Member Noteproperty 'DriveUserName' $DriveUserName
-                                $MountedDrive.PSObject.TypeNames.Insert(0, 'PowerView.RegMountedDrive')
+                                $MountedDrive.PSObject.TypeNames.Insert(0, 'pView.RegMountedDrive')
                                 $MountedDrive
                             }
                         }
@@ -16166,13 +15641,13 @@ Get-WMIProcess -ComputerName PRIMARY.testlab.local -Credential $Cred
 
 .OUTPUTS
 
-PowerView.UserProcess
+pView.UserProcess
 
 A PSCustomObject containing the remote process information.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.UserProcess')]
+    [OutputType('pView.UserProcess')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -16202,7 +15677,7 @@ A PSCustomObject containing the remote process information.
                     $Process | Add-Member Noteproperty 'ProcessID' $_.ProcessID
                     $Process | Add-Member Noteproperty 'Domain' $Owner.Domain
                     $Process | Add-Member Noteproperty 'User' $Owner.User
-                    $Process.PSObject.TypeNames.Insert(0, 'PowerView.UserProcess')
+                    $Process.PSObject.TypeNames.Insert(0, 'pView.UserProcess')
                     $Process
                 }
             }
@@ -16300,11 +15775,11 @@ Find-InterestingFile -Credential $Cred -Path "\\PRIMARY.testlab.local\C$\Temp\"
 
 .OUTPUTS
 
-PowerView.FoundFile
+pView.FoundFile
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.FoundFile')]
+    [OutputType('pView.FoundFile')]
     [CmdletBinding(DefaultParameterSetName = 'FileSpecification')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -16430,7 +15905,7 @@ PowerView.FoundFile
                         'Length' = $_.Length
                     }
                     $FoundFile = New-Object -TypeName PSObject -Property $FileParams
-                    $FoundFile.PSObject.TypeNames.Insert(0, 'PowerView.FoundFile')
+                    $FoundFile.PSObject.TypeNames.Insert(0, 'pView.FoundFile')
                     $FoundFile
                 }
             }
@@ -16484,7 +15959,7 @@ function New-ThreadedFunction {
         # force a single-threaded apartment state (for token-impersonation stuffz)
         $SessionState.ApartmentState = [System.Threading.ApartmentState]::STA
 
-        # import the current session state's variables and functions so the chained PowerView
+        # import the current session state's variables and functions so the chained pView
         #   functionality can be used by the threaded blocks
         if (-not $NoImports) {
             # grab all the current variables for this runspace
@@ -16787,11 +16262,11 @@ Searches for domain admin locations in the testlab.local using the specified alt
 
 .OUTPUTS
 
-PowerView.UserLocation
+pView.UserLocation
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.UserLocation')]
+    [OutputType('pView.UserLocation')]
     [CmdletBinding(DefaultParameterSetName = 'UserGroupIdentity')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -17097,7 +16572,7 @@ PowerView.UserLocation
                                 else {
                                     $UserLocation | Add-Member Noteproperty 'LocalAdmin' $Null
                                 }
-                                $UserLocation.PSObject.TypeNames.Insert(0, 'PowerView.UserLocation')
+                                $UserLocation.PSObject.TypeNames.Insert(0, 'pView.UserLocation')
                                 $UserLocation
                             }
                         }
@@ -17129,7 +16604,7 @@ PowerView.UserLocation
                                     else {
                                         $UserLocation | Add-Member Noteproperty 'LocalAdmin' $Null
                                     }
-                                    $UserLocation.PSObject.TypeNames.Insert(0, 'PowerView.UserLocation')
+                                    $UserLocation.PSObject.TypeNames.Insert(0, 'pView.UserLocation')
                                     $UserLocation
                                 }
                             }
@@ -17365,13 +16840,13 @@ Searches processes being run by 'domain admins' in the testlab.local using the s
 
 .OUTPUTS
 
-PowerView.UserProcess
+pView.UserProcess
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUsePSCredentialType', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
-    [OutputType('PowerView.UserProcess')]
+    [OutputType('pView.UserProcess')]
     [CmdletBinding(DefaultParameterSetName = 'None')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -17671,7 +17146,7 @@ Defaults to the current domain.
 
 .PARAMETER Filter
 
-A hashtable of PowerView.LogonEvent properties to filter for.
+A hashtable of pView.LogonEvent properties to filter for.
 The 'op|operator|operation' clause can have '&', '|', 'and', or 'or',
 and is 'or' by default, meaning at least one clause matches instead of all.
 See the exaples for usage.
@@ -17789,9 +17264,9 @@ instead of in a threaded manner, using the alternate credential.
 
 .OUTPUTS
 
-PowerView.LogonEvent
+pView.LogonEvent
 
-PowerView.ExplicitCredentialLogon
+pView.ExplicitCredentialLogon
 
 .LINK
 
@@ -17802,8 +17277,8 @@ http://www.sixdub.net/2014/11/07/offensive-event-parsing-bringing-home-trophies/
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUsePSCredentialType', '')]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
-    [OutputType('PowerView.LogonEvent')]
-    [OutputType('PowerView.ExplicitCredentialLogon')]
+    [OutputType('pView.LogonEvent')]
+    [OutputType('pView.ExplicitCredentialLogon')]
     [CmdletBinding(DefaultParameterSetName = 'Domain')]
     Param(
         [Parameter(ParameterSetName = 'ComputerName', Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -18181,11 +17656,11 @@ Searches for domain shares in the testlab.local domain using the specified alter
 
 .OUTPUTS
 
-PowerView.ShareInfo
+pView.ShareInfo
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ShareInfo')]
+    [OutputType('pView.ShareInfo')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Alias('DNSHostName')]
@@ -18531,11 +18006,11 @@ Searches interesting files in the testlab.local domain using the specified alter
 
 .OUTPUTS
 
-PowerView.FoundFile
+pView.FoundFile
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.FoundFile')]
+    [OutputType('pView.FoundFile')]
     [CmdletBinding(DefaultParameterSetName = 'FileSpecification')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -19222,18 +18697,18 @@ domain using the alternate credentials.
 
 .OUTPUTS
 
-PowerView.LocalGroupMember.API
+pView.LocalGroupMember.API
 
 Custom PSObject with translated group property fields from API results.
 
-PowerView.LocalGroupMember.WinNT
+pView.LocalGroupMember.WinNT
 
 Custom PSObject with translated group property fields from WinNT results.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.LocalGroupMember.API')]
-    [OutputType('PowerView.LocalGroupMember.WinNT')]
+    [OutputType('pView.LocalGroupMember.API')]
+    [OutputType('pView.LocalGroupMember.WinNT')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Alias('DNSHostName')]
@@ -19540,23 +19015,23 @@ Return domain trusts for the "prod.testlab.local" domain enumerated through API 
 
 .OUTPUTS
 
-PowerView.DomainTrust.LDAP
+pView.DomainTrust.LDAP
 
 Custom PSObject with translated domain LDAP trust result fields (default).
 
-PowerView.DomainTrust.NET
+pView.DomainTrust.NET
 
 A TrustRelationshipInformationCollection returned when using .NET methods.
 
-PowerView.DomainTrust.API
+pView.DomainTrust.API
 
 Custom PSObject with translated domain API trust result fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.DomainTrust.NET')]
-    [OutputType('PowerView.DomainTrust.LDAP')]
-    [OutputType('PowerView.DomainTrust.API')]
+    [OutputType('pView.DomainTrust.NET')]
+    [OutputType('pView.DomainTrust.LDAP')]
+    [OutputType('pView.DomainTrust.API')]
     [CmdletBinding(DefaultParameterSetName = 'LDAP')]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -19737,7 +19212,7 @@ Custom PSObject with translated domain API trust result fields.
                     $DomainTrust | Add-Member Noteproperty 'TrustDirection' "$Direction"
                     $DomainTrust | Add-Member Noteproperty 'WhenCreated' $Props.whencreated[0]
                     $DomainTrust | Add-Member Noteproperty 'WhenChanged' $Props.whenchanged[0]
-                    $DomainTrust.PSObject.TypeNames.Insert(0, 'PowerView.DomainTrust.LDAP')
+                    $DomainTrust.PSObject.TypeNames.Insert(0, 'pView.DomainTrust.LDAP')
                     $DomainTrust
                 }
                 if ($Results) {
@@ -19807,7 +19282,7 @@ Custom PSObject with translated domain API trust result fields.
                         $DomainTrust | Add-Member Noteproperty 'TrustAttributes' $Info.TrustAttributes
                         $DomainTrust | Add-Member Noteproperty 'TargetSid' $SidString
                         $DomainTrust | Add-Member Noteproperty 'TargetGuid' $Info.DomainGuid
-                        $DomainTrust.PSObject.TypeNames.Insert(0, 'PowerView.DomainTrust.API')
+                        $DomainTrust.PSObject.TypeNames.Insert(0, 'pView.DomainTrust.API')
                         $DomainTrust
                     }
                 }
@@ -19823,7 +19298,7 @@ Custom PSObject with translated domain API trust result fields.
             $FoundDomain = Get-Domain @NetSearcherArguments
             if ($FoundDomain) {
                 $FoundDomain.GetAllTrustRelationships() | ForEach-Object {
-                    $_.PSObject.TypeNames.Insert(0, 'PowerView.DomainTrust.NET')
+                    $_.PSObject.TypeNames.Insert(0, 'pView.DomainTrust.NET')
                     $_
                 }
             }
@@ -19879,13 +19354,13 @@ Return trusts for the "external.local" forest using the specified alternate cred
 
 .OUTPUTS
 
-PowerView.DomainTrust.NET
+pView.DomainTrust.NET
 
 A TrustRelationshipInformationCollection returned when using .NET methods (default).
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ForestTrust.NET')]
+    [OutputType('pView.ForestTrust.NET')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -19908,7 +19383,7 @@ A TrustRelationshipInformationCollection returned when using .NET methods (defau
 
         if ($FoundForest) {
             $FoundForest.GetAllTrustRelationships() | ForEach-Object {
-                $_.PSObject.TypeNames.Insert(0, 'PowerView.ForestTrust.NET')
+                $_.PSObject.TypeNames.Insert(0, 'pView.ForestTrust.NET')
                 $_
             }
         }
@@ -20007,13 +19482,13 @@ using the specified alternate credentials.
 
 .OUTPUTS
 
-PowerView.ForeignUser
+pView.ForeignUser
 
 Custom PSObject with translated user property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ForeignUser')]
+    [OutputType('pView.ForeignUser')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -20102,7 +19577,7 @@ Custom PSObject with translated user property fields.
                         $ForeignUser | Add-Member Noteproperty 'GroupDomain' $GroupDomain
                         $ForeignUser | Add-Member Noteproperty 'GroupName' $GroupName
                         $ForeignUser | Add-Member Noteproperty 'GroupDistinguishedName' $Membership
-                        $ForeignUser.PSObject.TypeNames.Insert(0, 'PowerView.ForeignUser')
+                        $ForeignUser.PSObject.TypeNames.Insert(0, 'pView.ForeignUser')
                         $ForeignUser
                     }
                 }
@@ -20200,13 +19675,13 @@ queries, and using the specified alternate credentials.
 
 .OUTPUTS
 
-PowerView.ForeignGroupMember
+pView.ForeignGroupMember
 
 Custom PSObject with translated group member property fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.ForeignGroupMember')]
+    [OutputType('pView.ForeignGroupMember')]
     [CmdletBinding()]
     Param(
         [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
@@ -20298,7 +19773,7 @@ Custom PSObject with translated group member property fields.
                     $ForeignGroupMember | Add-Member Noteproperty 'MemberDomain' $MemberDomain
                     $ForeignGroupMember | Add-Member Noteproperty 'MemberName' $MemberName
                     $ForeignGroupMember | Add-Member Noteproperty 'MemberDistinguishedName' $MemberDistinguishedName
-                    $ForeignGroupMember.PSObject.TypeNames.Insert(0, 'PowerView.ForeignGroupMember')
+                    $ForeignGroupMember.PSObject.TypeNames.Insert(0, 'pView.ForeignGroupMember')
                     $ForeignGroupMember
                 }
             }
@@ -20405,23 +19880,23 @@ using the specified alternate credentials, and output everything to a .csv file.
 
 .OUTPUTS
 
-PowerView.DomainTrust.LDAP
+pView.DomainTrust.LDAP
 
 Custom PSObject with translated domain LDAP trust result fields (default).
 
-PowerView.DomainTrust.NET
+pView.DomainTrust.NET
 
 A TrustRelationshipInformationCollection returned when using .NET methods.
 
-PowerView.DomainTrust.API
+pView.DomainTrust.API
 
 Custom PSObject with translated domain API trust result fields.
 #>
 
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
-    [OutputType('PowerView.DomainTrust.NET')]
-    [OutputType('PowerView.DomainTrust.LDAP')]
-    [OutputType('PowerView.DomainTrust.API')]
+    [OutputType('pView.DomainTrust.NET')]
+    [OutputType('pView.DomainTrust.LDAP')]
+    [OutputType('pView.DomainTrust.API')]
     [CmdletBinding(DefaultParameterSetName = 'LDAP')]
     Param(
         [Parameter(ParameterSetName = 'API')]
@@ -20644,7 +20119,7 @@ $Mod = New-InMemoryModule -ModuleName Win32
 # [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', Scope='Function', Target='psenum')]
 
 # used to parse the 'samAccountType' property for users/computers/groups
-$SamAccountTypeEnum = psenum $Mod PowerView.SamAccountTypeEnum UInt32 @{
+$SamAccountTypeEnum = psenum $Mod pView.SamAccountTypeEnum UInt32 @{
     DOMAIN_OBJECT                   =   '0x00000000'
     GROUP_OBJECT                    =   '0x10000000'
     NON_SECURITY_GROUP_OBJECT       =   '0x10000001'
@@ -20659,7 +20134,7 @@ $SamAccountTypeEnum = psenum $Mod PowerView.SamAccountTypeEnum UInt32 @{
 }
 
 # used to parse the 'grouptype' property for groups
-$GroupTypeEnum = psenum $Mod PowerView.GroupTypeEnum UInt32 @{
+$GroupTypeEnum = psenum $Mod pView.GroupTypeEnum UInt32 @{
     CREATED_BY_SYSTEM               =   '0x00000001'
     GLOBAL_SCOPE                    =   '0x00000002'
     DOMAIN_LOCAL_SCOPE              =   '0x00000004'
@@ -20670,7 +20145,7 @@ $GroupTypeEnum = psenum $Mod PowerView.GroupTypeEnum UInt32 @{
 } -Bitfield
 
 # used to parse the 'userAccountControl' property for users/groups
-$UACEnum = psenum $Mod PowerView.UACEnum UInt32 @{
+$UACEnum = psenum $Mod pView.UACEnum UInt32 @{
     SCRIPT                          =   1
     ACCOUNTDISABLE                  =   2
     HOMEDIR_REQUIRED                =   8
@@ -20710,7 +20185,7 @@ $WTSConnectState = psenum $Mod WTS_CONNECTSTATE_CLASS UInt16 @{
 }
 
 # the WTSEnumerateSessionsEx result structure
-$WTS_SESSION_INFO_1 = struct $Mod PowerView.RDPSessionInfo @{
+$WTS_SESSION_INFO_1 = struct $Mod pView.RDPSessionInfo @{
     ExecEnvId = field 0 UInt32
     State = field 1 $WTSConnectState
     SessionId = field 2 UInt32
@@ -20728,14 +20203,14 @@ $WTS_CLIENT_ADDRESS = struct $mod WTS_CLIENT_ADDRESS @{
 }
 
 # the NetShareEnum result structure
-$SHARE_INFO_1 = struct $Mod PowerView.ShareInfo @{
+$SHARE_INFO_1 = struct $Mod pView.ShareInfo @{
     Name = field 0 String -MarshalAs @('LPWStr')
     Type = field 1 UInt32
     Remark = field 2 String -MarshalAs @('LPWStr')
 }
 
 # the NetWkstaUserEnum result structure
-$WKSTA_USER_INFO_1 = struct $Mod PowerView.LoggedOnUserInfo @{
+$WKSTA_USER_INFO_1 = struct $Mod pView.LoggedOnUserInfo @{
     UserName = field 0 String -MarshalAs @('LPWStr')
     LogonDomain = field 1 String -MarshalAs @('LPWStr')
     AuthDomains = field 2 String -MarshalAs @('LPWStr')
@@ -20743,7 +20218,7 @@ $WKSTA_USER_INFO_1 = struct $Mod PowerView.LoggedOnUserInfo @{
 }
 
 # the NetSessionEnum result structure
-$SESSION_INFO_10 = struct $Mod PowerView.SessionInfo @{
+$SESSION_INFO_10 = struct $Mod pView.SessionInfo @{
     CName = field 0 String -MarshalAs @('LPWStr')
     UserName = field 1 String -MarshalAs @('LPWStr')
     Time = field 2 UInt32
