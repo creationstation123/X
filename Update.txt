@@ -941,7 +941,7 @@ public class King : System.Configuration.Install.Installer
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"An error occurred: {ex.Message}");
+            Console.WriteLine(string.Format("An error occurred: {0}", ex.Message));
         }
 
 
