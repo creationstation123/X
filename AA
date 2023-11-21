@@ -1,0 +1,1 @@
+powershell -c "Start-Service TrustedInstaller; $a = Get-NTProcess -Name TrustedInstaller.exe; $q = $a.openToken(); $q.groups | Where-Object {$_.sid.name -match 'TrustedInstaller'}"
