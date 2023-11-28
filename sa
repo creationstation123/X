@@ -1,0 +1,23 @@
+# Build our users and roles object
+$UserRoles = Get-AzureADDirectoryRole | ForEach-Object {
+        
+    $Role = $_
+    $RoleDisplayName = $_.DisplayName
+        
+    $RoleMembers = Get-AzureADDirectoryRoleMember -ObjectID $Role.ObjectID
+        
+    foreach ($Member in $RoleMembers) {
+        # Outputting properties directly
+        @{
+            MemberName      = $Member.DisplayName
+            MemberID        = $Member.ObjectID
+            MemberOnPremID  = $Member.OnPremisesSecurityIdentifier
+            MemberUPN       = $Member.UserPrincipalName
+            MemberType      = $Member.ObjectType
+            RoleID          = $Role.RoleTemplateId
+            RoleDisplayName = $RoleDisplayName
+        }
+    }    
+}
+
+$UserRoles | Where-Object {$_.MemberType -eq "ServicePrincipal"}
