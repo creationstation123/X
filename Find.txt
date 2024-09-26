@@ -1298,5 +1298,4 @@ Set-Alias Invoke-FileFinder Find-InterestingDomainShareFile
 Set-Alias Invoke-ShareFinder Find-DomainShare
 Set-Alias Invoke-FileFinder Find-InterestingDomainShareFile
 
-Invoke-ShareFinder
 
