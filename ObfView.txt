@@ -1316,54 +1316,7 @@ function Get-PrincipalContext {
 
 function Add-RemoteConnection {
 
-.SYNOPSIS
 
-Pseudo "mounts" a connection to a remote path using the specified
-credential object, allowing for access of remote resources. If a -Path isn't
-specified, a -ComputerName is required to pseudo-mount IPC$.
-
-Author: Will Schroeder (@harmj0y)  
-License: BSD 3-Clause  
-Required Dependencies: PSReflect  
-
-.DESCRIPTION
-
-This function uses WNetAddConnection2W to make a 'temporary' (i.e. not saved) connection
-to the specified remote -Path (\\UNC\share) with the alternate credentials specified in the
--Credential object. If a -Path isn't specified, a -ComputerName is required to pseudo-mount IPC$.
-
-To destroy the connection, use Remove-RemoteConnection with the same specified \\UNC\share path
-or -ComputerName.
-
-.PARAMETER ComputerName
-
-Specifies the system to add a \\ComputerName\IPC$ connection for.
-
-.PARAMETER Path
-
-Specifies the remote \\UNC\path to add the connection for.
-
-.PARAMETER Credential
-
-A [Management.Automation.PSCredential] object of alternate credentials
-for connection to the remote system.
-
-.EXAMPLE
-
-$Cred = Get-Credential
-Add-RemoteConnection -ComputerName 'PRIMARY.testlab.local' -Credential $Cred
-
-.EXAMPLE
-
-$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
-$Cred = New-Object System.Management.Automation.PSCredential('TESTLAB\dfm.a', $SecPassword)
-Add-RemoteConnection -Path '\\PRIMARY.testlab.local\C$\' -Credential $Cred
-
-.EXAMPLE
-
-$Cred = Get-Credential
-@('PRIMARY.testlab.local','SECONDARY.testlab.local') | Add-RemoteConnection  -Credential $Cred
-#>
 
     [CmdletBinding(DefaultParameterSetName = 'ComputerName')]
     Param(
