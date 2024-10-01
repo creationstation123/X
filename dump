@@ -3,6 +3,13 @@ public static extern bool EnumProcessModulesEx(IntPtr hProcess, [Out] IntPtr[] l
 [DllImport("psapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
 public static extern uint GetModuleBaseName(IntPtr hProcess, IntPtr hModule, [Out] char[] lpBaseName, uint nSize);
 
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint dwSize, out uint lpNumberOfBytesRead);
+
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesWritten);
+
+
 
 private static void PatchA()
 {
