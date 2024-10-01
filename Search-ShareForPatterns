@@ -1,66 +1,51 @@
-# Function to search for patterns in .ps files from a list of network shares
 function Search-ShareForPatterns {
     param (
-        [string]$filePath  # The path to the file containing share paths
+        [string]$shareListPath,  # Path to the file containing the list of shares
+        [string]$outputCsvPath   # Path to the output CSV file
     )
 
-    try {
-        # Read the list of share paths from the file
-        $sharePaths = Get-Content -Path $filePath -ErrorAction Stop
-    } catch {
-        Write-Error "Failed to read the file containing share paths. Error: $_"
-        return
-    }
+    # Get the list of shares from the file
+    $sharelist = Get-Content $shareListPath
 
-    # Loop through each share path in the file
-    foreach ($sharePath in $sharePaths) {
+    # Loop through each share
+    foreach ($share in $sharelist) {
+        # Extract hostname and sharename from each share path
+        $hostname, $shareName = $share.TrimStart("\\").Split("\", 2)
+
         try {
-            Write-Host "Attempting to search in: $sharePath"
-            
-            # Check if the share is accessible
-            if (Test-Path -Path $sharePath) {
-                Write-Host "Connected to: $sharePath"
-                
-                # Get all .ps files from the share and its subdirectories
-                $psFiles = Get-ChildItem -Path $sharePath -Filter *.ps -Recurse -ErrorAction SilentlyContinue
+            # Create a temporary PSDrive to the current share
+            New-PSDrive -Name "TempShare" -PSProvider FileSystem -Root $share -ErrorAction Stop
 
-                # Check if there are any .ps files found
-                if ($psFiles.Count -eq 0) {
-                    Write-Host "No .ps files found in: $sharePath"
-                    continue
-                }
-
-                Write-Host "Found $($psFiles.Count) .ps files in: $sharePath. Searching for 'svc' and 'ConvertTo-SecureString'..."
-
-                # Loop through each .ps file
-                foreach ($file in $psFiles) {
-                    try {
-                        # Read the content of the file
-                        $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
-
-                        # Search for both "svc" and "ConvertTo-SecureString"
-                        if ($content -match 'svc' -or $content -match 'ConvertTo-SecureString') {
-                            Write-Host "Match found in file: $($file.FullName)"
-                        }
-                    } catch {
-                        Write-Warning "Could not read file: $($file.FullName). Error: $_"
+            # Check if the drive was mounted successfully
+            if (Test-Path "TempShare:\") {
+                # Get all .ps1, .ps, and .txt files recursively
+                Get-ChildItem -Path "TempShare:\" -Recurse -ErrorAction SilentlyContinue | 
+                Where-Object { $_.Extension -in '.ps1', '.ps', '.txt' } | 
+                ForEach-Object { 
+                    if (Select-String -Path $_.FullName -Pattern 'HSG' -ErrorAction SilentlyContinue) {
+                        # Create a custom object and append to the CSV
+                        [PSCustomObject]@{
+                            Hostname = $hostname
+                            ShareName = $shareName
+                            FilePath = $_.FullName
+                        } | Export-Csv -Path $outputCsvPath -NoTypeInformation -Append
                     }
                 }
+                # Remove the PSDrive after processing the share
+                Remove-PSDrive -Name "TempShare"
             } else {
-                Write-Warning "Unable to access: $sharePath. Skipping this share."
+                Write-Host "Unable to connect to share: $share"
             }
         } catch {
-            Write-Warning "Error occurred while processing the share: $sharePath. Error: $_"
+            Write-Warning "Error connecting to or processing share: $share. Error: $_"
+            if (Get-PSDrive -Name "TempShare" -ErrorAction SilentlyContinue) {
+                Remove-PSDrive -Name "TempShare"
+            }
         }
     }
 
-    Write-Host "Search completed."
+    Write-Host "Search completed. Results saved to: $outputCsvPath"
 }
 
-# Example usage:
-# Assuming the file 'sharelist.txt' contains:
-# \\hostname1\share
-# \\hostname2\share
-#
-# You can run:
-# Search-ShareForPatterns "C:\Path\To\sharelist.txt"
+# Example usage
+# Search-ShareForPatterns -shareListPath "C:\Path\To\Sharelist.txt" -outputCsvPath "C:\Path\To\Results.csv"
