@@ -1,0 +1,27 @@
+Sub AddBackslashesAndA()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim cell As Range
+    Dim originalValue As String
+    Dim newValue As String
+    
+    ' Set the worksheet
+    Set ws = ThisWorkbook.Sheets(1) ' Modify the sheet index if needed
+    
+    ' Find the last row with data in column D
+    lastRow = ws.Cells(ws.Rows.Count, "D").End(xlUp).Row
+    
+    ' Loop through each cell in column D
+    For Each cell In ws.Range("D1:D" & lastRow)
+        ' Get the original value from the cell
+        originalValue = cell.Value
+        
+        ' Create the new value by adding \\ at the front and \A at the end
+        newValue = "\\" & originalValue & "\A"
+        
+        ' Update the cell with the new value
+        cell.Value = newValue
+    Next cell
+    
+    MsgBox "Operation completed!"
+End Sub
