@@ -1,3 +1,9 @@
+[DllImport("psapi.dll", SetLastError = true)]
+public static extern bool EnumProcessModulesEx(IntPtr hProcess, [Out] IntPtr[] lphModule, uint cb, out uint lpcbNeeded, uint dwFilterFlag);
+[DllImport("psapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern uint GetModuleBaseName(IntPtr hProcess, IntPtr hModule, [Out] char[] lpBaseName, uint nSize);
+
+
 private static void PatchA()
 {
     byte[] pattern = { 0x48, 0x00, 0x00, 0x74, 0x00, 0x48, 0x00, 0x00, 0x74 };
