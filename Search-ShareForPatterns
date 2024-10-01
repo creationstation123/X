@@ -1,0 +1,49 @@
+# Function to search for patterns in .ps files from a list of shares
+function Search-ShareForPatterns {
+    param (
+        [string]$filePath  # The path to the file containing share paths
+    )
+
+    # Read the list of share paths from the file
+    $sharePaths = Get-Content -Path $filePath -ErrorAction Stop
+
+    foreach ($sharePath in $sharePaths) {
+        Write-Host "Searching in: $sharePath"
+        
+        # Get all .ps files from the share and its subdirectories
+        $psFiles = Get-ChildItem -Path $sharePath -Filter *.ps -Recurse -ErrorAction SilentlyContinue
+
+        # Check if there are any .ps files found
+        if ($psFiles.Count -eq 0) {
+            Write-Host "No .ps files found in: $sharePath"
+            continue
+        }
+
+        Write-Host "Found $($psFiles.Count) .ps files in: $sharePath. Searching for 'svc' and 'ConvertTo-SecureString'..."
+
+        # Loop through each .ps file
+        foreach ($file in $psFiles) {
+            try {
+                # Read the content of the file
+                $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
+
+                # Search for both "svc" and "ConvertTo-SecureString"
+                if ($content -match 'svc' -or $content -match 'ConvertTo-SecureString') {
+                    Write-Host "Match found in file: $($file.FullName)"
+                }
+            } catch {
+                Write-Warning "Could not read file: $($file.FullName). Error: $_"
+            }
+        }
+    }
+
+    Write-Host "Search completed."
+}
+
+# Example usage:
+# Assuming the file 'sharelist.txt' contains:
+# \\hostname1\share
+# \\hostname2\share
+#
+# You can run:
+# Search-ShareForPatterns "C:\Path\To\sharelist.txt"
