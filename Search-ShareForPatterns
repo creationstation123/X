@@ -1,4 +1,4 @@
-# Function to search for patterns in .ps files from a list of shares
+# Function to search for patterns in .ps files from a list of network shares
 function Search-ShareForPatterns {
     param (
         [string]$filePath  # The path to the file containing share paths
@@ -7,33 +7,41 @@ function Search-ShareForPatterns {
     # Read the list of share paths from the file
     $sharePaths = Get-Content -Path $filePath -ErrorAction Stop
 
+    # Loop through each share path in the file
     foreach ($sharePath in $sharePaths) {
-        Write-Host "Searching in: $sharePath"
+        Write-Host "Attempting to search in: $sharePath"
         
-        # Get all .ps files from the share and its subdirectories
-        $psFiles = Get-ChildItem -Path $sharePath -Filter *.ps -Recurse -ErrorAction SilentlyContinue
+        # Check if the share is accessible
+        if (Test-Path -Path $sharePath) {
+            Write-Host "Connected to: $sharePath"
+            
+            # Get all .ps files from the share and its subdirectories
+            $psFiles = Get-ChildItem -Path $sharePath -Filter *.ps -Recurse -ErrorAction SilentlyContinue
 
-        # Check if there are any .ps files found
-        if ($psFiles.Count -eq 0) {
-            Write-Host "No .ps files found in: $sharePath"
-            continue
-        }
-
-        Write-Host "Found $($psFiles.Count) .ps files in: $sharePath. Searching for 'svc' and 'ConvertTo-SecureString'..."
-
-        # Loop through each .ps file
-        foreach ($file in $psFiles) {
-            try {
-                # Read the content of the file
-                $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
-
-                # Search for both "svc" and "ConvertTo-SecureString"
-                if ($content -match 'svc' -or $content -match 'ConvertTo-SecureString') {
-                    Write-Host "Match found in file: $($file.FullName)"
-                }
-            } catch {
-                Write-Warning "Could not read file: $($file.FullName). Error: $_"
+            # Check if there are any .ps files found
+            if ($psFiles.Count -eq 0) {
+                Write-Host "No .ps files found in: $sharePath"
+                continue
             }
+
+            Write-Host "Found $($psFiles.Count) .ps files in: $sharePath. Searching for 'svc' and 'ConvertTo-SecureString'..."
+
+            # Loop through each .ps file
+            foreach ($file in $psFiles) {
+                try {
+                    # Read the content of the file
+                    $content = Get-Content -Path $file.FullName -Raw -ErrorAction Stop
+
+                    # Search for both "svc" and "ConvertTo-SecureString"
+                    if ($content -match 'svc' -or $content -match 'ConvertTo-SecureString') {
+                        Write-Host "Match found in file: $($file.FullName)"
+                    }
+                } catch {
+                    Write-Warning "Could not read file: $($file.FullName). Error: $_"
+                }
+            }
+        } else {
+            Write-Warning "Unable to access: $sharePath. Skipping this share."
         }
     }
 
