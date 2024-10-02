@@ -22,7 +22,8 @@ function Search-ShareForPatterns {
                 Get-ChildItem -Path "TempShare:\" -Recurse -ErrorAction SilentlyContinue | 
                 Where-Object { $_.Extension -in '.ps1', '.ps', '.txt' } | 
                 ForEach-Object { 
-                    if (Select-String -Path $_.FullName -Pattern 'svc', 'password', 'SecureString' -ErrorAction SilentlyContinue) {
+                    if (Select-String -Path $_.FullName -Pattern 'svc', 'Svc', 'SVC', 'password', 'Password', 'PASSWORD', 'SecureString', 'securesString', 'SECURESTRING' -ErrorAction SilentlyContinue) {
+ 
                         # Create a custom object and append to the CSV
                         [PSCustomObject]@{
                             Hostname = $hostname
