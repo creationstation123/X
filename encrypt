@@ -1,0 +1,53 @@
+# Define file paths for the input (plaintext) and output (encrypted) files
+$inputFile = "C:\path\to\your\plaintext.txt"
+$outputFile = "C:\path\to\your\encrypted.txt"
+
+# Define a key and IV (Initialization Vector) for AES encryption
+# Ensure that the key is 32 bytes (256-bit AES), and the IV is 16 bytes
+$key = [byte[]](0x00..0x1F) # 32-byte key (256-bit)
+$iv = [byte[]](0x00..0x0F)  # 16-byte IV (128-bit)
+
+# Create an AES encryption object
+$aes = [System.Security.Cryptography.AesManaged]::new()
+$aes.Key = $key
+$aes.IV = $iv
+
+# Function to encrypt data
+function Encrypt-Data {
+    param(
+        [byte[]]$data
+    )
+
+    # Create an encryptor object
+    $encryptor = $aes.CreateEncryptor()
+
+    # Create a memory stream to hold the encrypted data
+    $memoryStream = New-Object System.IO.MemoryStream
+    $cryptoStream = New-Object System.Security.Cryptography.CryptoStream(
+        $memoryStream, $encryptor, [System.Security.Cryptography.CryptoStreamMode]::Write
+    )
+
+    # Encrypt the data and write to the memory stream
+    $cryptoStream.Write($data, 0, $data.Length)
+    $cryptoStream.FlushFinalBlock()
+
+    # Get the encrypted data from the memory stream
+    $encryptedData = $memoryStream.ToArray()
+
+    # Clean up streams
+    $cryptoStream.Close()
+    $memoryStream.Close()
+
+    return $encryptedData
+}
+
+# Read the contents of the input file as bytes
+$plaintextBytes = [System.IO.File]::ReadAllBytes($inputFile)
+
+# Encrypt the file data
+$encryptedBytes = Encrypt-Data -data $plaintextBytes
+
+# Write the encrypted data to the output file
+[System.IO.File]::WriteAllBytes($outputFile, $encryptedBytes)
+
+Write-Host "File encrypted successfully!"
