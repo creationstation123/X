@@ -1,0 +1,282 @@
+Now performing 1917 test(s)...
+52.17.50.82 az.dlgdigitalservices.com
+54.76.208.248 clubs.dlgdigitalservices.com
+54.229.189.153 digital.dlgdigitalservices.com
+185.199.111.153 docs.dlgdigitalservices.com
+185.199.108.153 docs.dlgdigitalservices.com
+185.199.109.153 docs.dlgdigitalservices.com
+185.199.110.153 docs.dlgdigitalservices.com
+52.31.33.38 ldap.dlgdigitalservices.com
+52.218.1.164 reports.dlgdigitalservices.com
+52.218.116.28 reports.dlgdigitalservices.com
+52.92.17.164 reports.dlgdigitalservices.com
+52.92.3.108 reports.dlgdigitalservices.com
+3.5.67.157 reports.dlgdigitalservices.com
+52.218.117.228 reports.dlgdigitalservices.com
+52.218.25.132 reports.dlgdigitalservices.com
+52.218.28.204 reports.dlgdigitalservices.com
+54.76.208.248 tools.dlgdigitalservices.com
+3.162.20.40 va.dlgdigitalservices.com
+3.162.20.73 va.dlgdigitalservices.com
+3.162.20.101 va.dlgdigitalservices.com
+3.162.20.107 va.dlgdigitalservices.com
+52.92.32.124 www.dlgdigitalservices.com
+52.92.32.204 www.dlgdigitalservices.com
+3.5.70.202 www.dlgdigitalservices.com
+52.218.28.20 www.dlgdigitalservices.com
+52.92.35.140 www.dlgdigitalservices.com
+52.218.97.156 www.dlgdigitalservices.com
+52.218.92.172 www.dlgdigitalservices.com
+52.92.4.116 www.dlgdigitalservices.com
+
+
+
+perl fierce.pl -dns directlinegroup.co.uk
+DNS Servers for directlinegroup.co.uk:
+	ha1.markmonitor.zone
+	ha3.markmonitor.zone
+	ha4.markmonitor.zone
+	ha2.markmonitor.zone
+
+Trying zone transfer first...
+	Testing ha1.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha3.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha4.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha2.markmonitor.zone
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+Can't open hosts.txt or the default wordlist
+Exiting...
+┌┌(loki@192)-(10:26am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns directlinegroup.co.uk
+┌┌(loki@192)-(10:26am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙fierce
+zsh: command not found: fierce
+┌┌(loki@192)-(10:27am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙unzip ~/Downloads/        
+┌┌(loki@192)-(10:27am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns directlinegroup.co.uk
+DNS Servers for directlinegroup.co.uk:
+	ha3.markmonitor.zone
+	ha4.markmonitor.zone
+	ha2.markmonitor.zone
+	ha1.markmonitor.zone
+
+Trying zone transfer first...
+	Testing ha3.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha4.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha2.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha1.markmonitor.zone
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+
+Checking for wildcard DNS...
+Nope. Good.
+Now performing 1917 test(s)...
+212.113.5.10	info.directlinegroup.co.uk
+212.113.5.42	info.directlinegroup.co.uk
+127.0.0.1	localhost.directlinegroup.co.uk
+212.113.5.12	mailgate.directlinegroup.co.uk
+212.113.5.13	ns.directlinegroup.co.uk
+195.171.18.152	portal.directlinegroup.co.uk
+195.171.18.210	portal.directlinegroup.co.uk
+195.171.18.197	remote.directlinegroup.co.uk
+212.113.5.43	webmail.directlinegroup.co.uk
+
+Subnets found (may want to probe here using nmap or unicornscan):
+	127.0.0.0-255 : 1 hostnames found.
+	195.171.18.0-255 : 3 hostnames found.
+	212.113.5.0-255 : 5 hostnames found.
+
+Done with Fierce scan: http://ha.ckers.org/fierce/
+Found 9 entries.
+
+Have a nice day.
+┌┌(loki@192)-(10:28am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns directline.com       
+DNS Servers for directline.com:
+	ns-803.awsdns-36.net
+	ns-1452.awsdns-53.org
+	ns-1999.awsdns-57.co.uk
+	ns-297.awsdns-37.com
+
+Trying zone transfer first...
+	Testing ns-803.awsdns-36.net
+		Request timed out or transfer not allowed.
+	Testing ns-1452.awsdns-53.org
+		Request timed out or transfer not allowed.
+	Testing ns-1999.awsdns-57.co.uk
+		Request timed out or transfer not allowed.
+	Testing ns-297.awsdns-37.com
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+
+Checking for wildcard DNS...
+Nope. Good.
+Now performing 1917 test(s)...
+62.27.38.101	c.directline.com
+83.100.128.50	content.directline.com
+213.61.121.81	de.directline.com
+150.230.126.249	docs.directline.com
+185.23.100.11	info.directline.com
+213.92.102.2	it.directline.com
+162.13.135.218	launch.directline.com
+212.187.163.26	mailgate.directline.com
+212.187.183.152	mailgate.directline.com
+64.40.98.15	new.directline.com
+212.113.5.13	ns.directline.com
+212.113.5.44	ns01.directline.com
+89.151.99.199	tc.directline.com
+185.23.100.11	uk.directline.com
+185.29.137.85	welcome.directline.com
+18.172.89.56	www.directline.com
+18.172.89.105	www.directline.com
+18.172.89.79	www.directline.com
+18.172.89.113	www.directline.com
+212.187.163.20	www2.directline.com
+
+Subnets found (may want to probe here using nmap or unicornscan):
+	150.230.126.0-255 : 1 hostnames found.
+	162.13.135.0-255 : 1 hostnames found.
+	18.172.89.0-255 : 4 hostnames found.
+	185.23.100.0-255 : 2 hostnames found.
+	185.29.137.0-255 : 1 hostnames found.
+	212.113.5.0-255 : 2 hostnames found.
+	212.187.163.0-255 : 2 hostnames found.
+	212.187.183.0-255 : 1 hostnames found.
+	213.61.121.0-255 : 1 hostnames found.
+	213.92.102.0-255 : 1 hostnames found.
+	62.27.38.0-255 : 1 hostnames found.
+	64.40.98.0-255 : 1 hostnames found.
+	83.100.128.0-255 : 1 hostnames found.
+	89.151.99.0-255 : 1 hostnames found.
+
+Done with Fierce scan: http://ha.ckers.org/fierce/
+Found 20 entries.
+
+Have a nice day.
+┌┌(loki@192)-(10:31am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙
+┌┌(loki@192)-(10:31am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns greenflag.com 
+DNS Servers for greenflag.com:
+	ns-1031.awsdns-00.org
+	ns-1904.awsdns-46.co.uk
+	ns-639.awsdns-15.net
+	ns-311.awsdns-38.com
+
+Trying zone transfer first...
+	Testing ns-1031.awsdns-00.org
+		Request timed out or transfer not allowed.
+	Testing ns-1904.awsdns-46.co.uk
+		Request timed out or transfer not allowed.
+	Testing ns-639.awsdns-15.net
+		Request timed out or transfer not allowed.
+	Testing ns-311.awsdns-38.com
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+
+Checking for wildcard DNS...
+Nope. Good.
+Now performing 1917 test(s)...
+93.174.139.66	contact.greenflag.com
+152.67.139.51	docs.greenflag.com
+62.27.38.101	e.greenflag.com
+93.174.139.66	i.greenflag.com
+46.37.191.121	news.greenflag.com
+23.227.38.65	shop.greenflag.com
+46.236.33.210	tc.greenflag.com
+
+Subnets found (may want to probe here using nmap or unicornscan):
+	152.67.139.0-255 : 1 hostnames found.
+	23.227.38.0-255 : 1 hostnames found.
+	46.236.33.0-255 : 1 hostnames found.
+	46.37.191.0-255 : 1 hostnames found.
+	62.27.38.0-255 : 1 hostnames found.
+	93.174.139.0-255 : 2 hostnames found.
+
+Done with Fierce scan: http://ha.ckers.org/fierce/
+Found 7 entries.
+
+Have a nice day.
+┌┌(loki@192)-(10:31am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns directlineforbusiness.co.uk
+DNS Servers for directlineforbusiness.co.uk:
+	ha2.markmonitor.zone
+	ha1.markmonitor.zone
+	ha3.markmonitor.zone
+	ha4.markmonitor.zone
+
+Trying zone transfer first...
+	Testing ha2.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha1.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha3.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha4.markmonitor.zone
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+
+Checking for wildcard DNS...
+Nope. Good.
+Now performing 1917 test(s)...
+31.193.12.164	marketing.directlineforbusiness.co.uk
+89.107.74.64	service.directlineforbusiness.co.uk
+
+Subnets found (may want to probe here using nmap or unicornscan):
+	31.193.12.0-255 : 1 hostnames found.
+	89.107.74.0-255 : 1 hostnames found.
+
+Done with Fierce scan: http://ha.ckers.org/fierce/
+Found 2 entries.
+
+Have a nice day.
+┌┌(loki@192)-(10:47am-:-04/29)┌-¨-¨¨˙
+└┌(~)┌¨˙perl fierce.pl -dns directlinegroupcareers.com  
+DNS Servers for directlinegroupcareers.com:
+	ha4.markmonitor.zone
+	ha2.markmonitor.zone
+	ha3.markmonitor.zone
+	ha1.markmonitor.zone
+
+Trying zone transfer first...
+	Testing ha4.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha2.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha3.markmonitor.zone
+		Request timed out or transfer not allowed.
+	Testing ha1.markmonitor.zone
+		Request timed out or transfer not allowed.
+
+Unsuccessful in zone transfer (it was worth a shot)
+Okay, trying the good old fashioned way... brute force
+
+Checking for wildcard DNS...
+Nope. Good.
+Now performing 1917 test(s)...
+
+Subnets found (may want to probe here using nmap or unicornscan):
+
+Done with Fierce scan: http://ha.ckers.org/fierce/
+Found 0 entries.
+
+Have a nice day.
+
